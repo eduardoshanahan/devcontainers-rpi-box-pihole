@@ -1,0 +1,90 @@
+{
+    "name": "${localEnv:PROJECT_NAME}",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".",
+        "args": {
+            "USERNAME": "${localEnv:HOST_USERNAME}",
+            "USER_UID": "${localEnv:HOST_UID}",
+            "USER_GID": "${localEnv:HOST_GID}",
+            "ANSIBLE_CORE_VERSION": "${localEnv:ANSIBLE_CORE_VERSION}",
+            "ANSIBLE_LINT_VERSION": "${localEnv:ANSIBLE_LINT_VERSION}",
+            "YAMLLINT_VERSION": "${localEnv:YAMLLINT_VERSION}"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "ansible.ansible.path": "/usr/local/bin/ansible",
+                "ansible.python.interpreterPath": "/usr/bin/python3",
+                "ansible.validation.lint.enabled": true,
+                "ansible.validation.lint.path": "/usr/local/bin/ansible-lint",
+                "ansible.validation.lint.configFile": "/workspace/.ansible-lint",
+                "editor.acceptSuggestionOnTab": false,
+                "editor.tabCompletion": "off",
+                "editor.acceptSuggestionOnEnter": "off",
+                "[yaml]": {
+                    "editor.defaultFormatter": "redhat.vscode-yaml"
+                }
+            },
+            "extensions": [
+                "ms-azuretools.vscode-docker",
+                "docker.docker",
+                "openai.chatgpt",
+                "DavidAnson.vscode-markdownlint",
+                "esbenp.prettier-vscode",
+                "dbaeumer.vscode-eslint",
+                "ms-vscode-remote.remote-containers",
+                "redhat.ansible",
+                "redhat.vscode-yaml",
+                "ms-python.python",
+                "ms-python.vscode-pylance"
+            ],
+            "terminal.integrated.defaultProfile.linux": "bash",
+            "terminal.integrated.profiles.linux": {
+                "bash": {
+                    "path": "/bin/bash",
+                    "icon": "terminal-bash"
+                }
+            }
+        }
+    },
+    "remoteUser": "${localEnv:HOST_USERNAME}",
+    "updateRemoteUserUID": true,
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+    "workspaceFolder": "/workspace",
+    "mounts": [
+        "source=${localWorkspaceFolder}/.devcontainer,target=/home/${localEnv:HOST_USERNAME}/.devcontainer,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.ssh,target=/home/${localEnv:HOST_USERNAME}/.ssh,type=bind,consistency=cached"
+    ],
+    "postCreateCommand": "chmod +x ~/.devcontainer/scripts/post-create.sh && ~/.devcontainer/scripts/post-create.sh",
+    "initializeCommand": "export CONTAINER_MEMORY=${localEnv:CONTAINER_MEMORY} && export CONTAINER_CPUS=${localEnv:CONTAINER_CPUS} && export CONTAINER_SHM_SIZE=${localEnv:CONTAINER_SHM_SIZE} && export CONTAINER_HOSTNAME=${localEnv:CONTAINER_HOSTNAME}",
+    "containerEnv": {
+        "USERNAME": "${localEnv:HOST_USERNAME}",
+        "USER_UID": "${localEnv:HOST_UID}",
+        "USER_GID": "${localEnv:HOST_GID}",
+        "CONTAINER_HOSTNAME": "${localEnv:CONTAINER_HOSTNAME}",
+        "GIT_USER_NAME": "${localEnv:GIT_USER_NAME}",
+        "GIT_USER_EMAIL": "${localEnv:GIT_USER_EMAIL}",
+        "GIT_REMOTE_URL": "${localEnv:GIT_REMOTE_URL}",
+        "ANSIBLE_CONFIG": "${localEnv:ANSIBLE_CONFIG}",
+        "DOCKER_IMAGE_NAME": "${localEnv:DOCKER_IMAGE_NAME}",
+        "DOCKER_IMAGE_TAG": "${localEnv:DOCKER_IMAGE_TAG}",
+        "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}"
+    },
+    "runArgs": [
+        "--name=${localEnv:DOCKER_IMAGE_NAME}",
+        "--hostname=${localEnv:CONTAINER_HOSTNAME}",
+        "--env-file=${localWorkspaceFolder}/.env",
+        "--env-file=${localWorkspaceFolder}/.devcontainer/config/.env",
+        "--env=SSH_AUTH_SOCK=${localEnv:SSH_AUTH_SOCK}",
+        "--memory=${localEnv:CONTAINER_MEMORY}",
+        "--cpus=${localEnv:CONTAINER_CPUS}",
+        "--shm-size=${localEnv:CONTAINER_SHM_SIZE}"
+    ],
+    "forwardPorts": [],
+    "remoteEnv": {
+        "SSH_AUTH_SOCK": "${localEnv:SSH_AUTH_SOCK}",
+        "PATH": "/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin"
+    }
+}

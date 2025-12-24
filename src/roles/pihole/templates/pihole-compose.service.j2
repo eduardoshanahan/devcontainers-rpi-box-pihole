@@ -1,0 +1,15 @@
+[Unit]
+Description=Pi-hole Docker Compose
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={{ pihole_compose_dir }}
+ExecStart=/usr/bin/docker compose -f {{ pihole_compose_dir }}/docker-compose.yml up -d
+ExecStop=/usr/bin/docker compose -f {{ pihole_compose_dir }}/docker-compose.yml down
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

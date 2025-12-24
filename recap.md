@@ -1,0 +1,29 @@
+# Recap
+
+## What we find
+
+- This repo assumes a separate base provisioning repo already set up Docker and `/srv/apps`.
+- `ansible-playbook src/playbooks/pi-apps.yml -l rpi_box_01` deploys the stack.
+- The `pihole` role asserts required variables, writes compose config, and starts the stack.
+
+## What we want to do
+
+- Keep tracking changes to roles, playbooks, and env requirements here.
+- Document any new stacks, variables, or inventory changes as they are added.
+
+## What we did
+
+- Initial project review completed and baseline notes captured.
+- Switched yaml output to `ansible.builtin.default` with `result_format = yaml` after the community yaml callback removal.
+- Updated Pi-hole compose template to use configured upstream DNS (no self DNS) and removed the obsolete `version` field.
+- Added a Pi-hole password sync task that updates the web password only when needed.
+- Added `PIHOLE_DNSMASQ_LISTENING` to ensure Pi-hole serves LAN DNS queries.
+- Switched Pi-hole to host networking (configurable) to avoid Docker DNS port-forwarding issues.
+- Confirmed LAN DNS works by querying `dig @192.168.1.58 rad.eu`.
+- Added a daily Pi-hole stats email report (configurable schedule and SMTP).
+- Added support for Pi-hole API token in report automation (auto-read with override).
+- Updated the report script to use Pi-hole v6 session auth with `PIHOLE_WEB_PASSWORD`.
+- Switched the report default to Pi-hole CLI (`PIHOLE_REPORT_MODE=cli`) to avoid API auth issues.
+- Added v6 API fallback when CLI stats are unavailable and CSRF header support for auth.
+- Added `PIHOLE_API_PASSWORD` to support v6 session auth when the API password differs.
+- Added a systemd autostart unit to recreate the Pi-hole container on boot.

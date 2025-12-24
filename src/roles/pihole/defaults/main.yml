@@ -1,0 +1,27 @@
+---
+pihole_compose_dir: /srv/apps/pihole
+pihole_data_dir: /srv/apps/pihole/etc-pihole
+pihole_dnsmasq_dir: /srv/apps/pihole/etc-dnsmasq.d
+pihole_image: "pihole/pihole:latest"
+pihole_timezone: "UTC"
+pihole_web_port: 80
+pihole_web_password: ""
+pihole_network_mode: "host"
+pihole_dns1: "1.1.1.1"
+pihole_dns2: "1.0.0.1"
+pihole_local_ipv4: ""
+pihole_enable_dhcp: false
+pihole_dnsmasq_listening: "all"
+pihole_healthcheck_enabled: true
+pihole_report_email: ""
+pihole_report_sender: ""
+pihole_report_smtp_host: ""
+pihole_report_smtp_port: 587
+pihole_report_smtp_user: ""
+pihole_report_smtp_password: ""
+pihole_report_schedule: "daily"
+pihole_report_api_token: ""
+pihole_report_mode: "cli"
+pihole_container_name: "pihole"
+pihole_api_password: ""
+pihole_systemd_autostart: true

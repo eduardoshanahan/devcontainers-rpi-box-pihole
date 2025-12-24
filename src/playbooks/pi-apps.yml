@@ -1,0 +1,7 @@
+---
+- name: Deploy Raspberry Pi applications
+  hosts: raspberry_pi
+  become: true
+  gather_facts: true
+  roles:
+    - pihole

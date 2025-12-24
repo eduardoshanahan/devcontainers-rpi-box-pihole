@@ -1,0 +1,3 @@
+---
+# Keep this config minimal; roles_path belongs in ansible.cfg or ANSIBLE_ROLES_PATH.
+skip_list: []

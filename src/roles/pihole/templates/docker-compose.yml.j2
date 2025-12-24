@@ -1,0 +1,37 @@
+services:
+  pihole:
+    image: "{{ pihole_image }}"
+    container_name: pihole
+    hostname: pihole
+    restart: unless-stopped
+    network_mode: {{ pihole_network_mode | to_json }}
+{% if pihole_network_mode != "host" %}
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "{{ pihole_web_port }}:80/tcp"
+{% if pihole_enable_dhcp %}
+      - "67:67/udp"
+{% endif %}
+{% endif %}
+    environment:
+      TZ: "{{ pihole_timezone }}"
+      WEBPASSWORD: "{{ pihole_web_password }}"
+      DNS1: "{{ pihole_dns1 }}"
+      DNS2: "{{ pihole_dns2 }}"
+      FTLCONF_DNSMASQ_LISTENING: {{ pihole_dnsmasq_listening | to_json }}
+{% if pihole_local_ipv4 | length > 0 %}
+      FTLCONF_LOCAL_IPV4: "{{ pihole_local_ipv4 }}"
+{% endif %}
+    volumes:
+      - "{{ pihole_data_dir }}:/etc/pihole"
+      - "{{ pihole_dnsmasq_dir }}:/etc/dnsmasq.d"
+    cap_add:
+      - NET_ADMIN
+{% if pihole_network_mode != "host" %}
+    dns:
+      - {{ pihole_dns1 | to_json }}
+{% if pihole_dns2 | length > 0 %}
+      - {{ pihole_dns2 | to_json }}
+{% endif %}
+{% endif %}

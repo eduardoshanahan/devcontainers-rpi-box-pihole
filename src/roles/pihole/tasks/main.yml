@@ -1,0 +1,165 @@
+---
+- name: Ensure required Pi-hole variables are provided
+  ansible.builtin.assert:
+    that:
+      - pihole_timezone is defined
+      - pihole_timezone | length > 0
+      - pihole_web_password is defined
+      - pihole_web_password | length > 0
+      - pihole_enable_dhcp is defined
+    fail_msg: "Define required pihole_* variables before applying this role."
+  tags: [pihole]
+
+- name: Ensure Pi-hole directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ pihole_compose_dir }}"
+    - "{{ pihole_data_dir }}"
+    - "{{ pihole_dnsmasq_dir }}"
+  tags: [pihole]
+
+- name: Deploy Pi-hole compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ pihole_compose_dir }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  tags: [pihole]
+
+- name: Start Pi-hole stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ pihole_compose_dir }}"
+    state: present
+    wait: true
+  tags: [pihole]
+
+- name: Read current Pi-hole web password hash
+  ansible.builtin.command: >
+    docker exec pihole sh -lc "grep -E '^WEBPASSWORD=' /etc/pihole/pihole-FTL.conf | cut -d= -f2 || true"
+  register: pihole_current_web_password_hash
+  changed_when: false
+  failed_when: false
+  tags: [pihole]
+
+- name: Compute desired Pi-hole web password hash
+  ansible.builtin.command: >
+    python3 -c "import hashlib, os; print(hashlib.sha256(os.environ['PIHOLE_WEB_PASSWORD'].encode()).hexdigest())"
+  register: pihole_desired_web_password_hash
+  changed_when: false
+  environment:
+    PIHOLE_WEB_PASSWORD: "{{ pihole_web_password }}"
+  no_log: true
+  tags: [pihole]
+
+- name: Ensure Pi-hole web password matches
+  ansible.builtin.command: >
+    docker exec pihole pihole setpassword "{{ pihole_web_password }}"
+  when: pihole_current_web_password_hash.stdout != pihole_desired_web_password_hash.stdout
+  no_log: true
+  tags: [pihole]
+
+- name: Determine Pi-hole report enablement
+  ansible.builtin.set_fact:
+    pihole_report_enabled: "{{ (pihole_report_email | default('')) | length > 0 }}"
+  tags: [pihole]
+
+- name: Ensure report schedule is valid
+  ansible.builtin.assert:
+    that:
+      - pihole_report_schedule in ["daily", "weekly"]
+    fail_msg: "Set DAILY_REPORT_SCHEDULE to 'daily' or 'weekly'."
+  when: pihole_report_enabled
+  tags: [pihole]
+
+- name: Ensure report variables are provided
+  ansible.builtin.assert:
+    that:
+      - pihole_report_sender | length > 0
+      - pihole_report_smtp_host | length > 0
+      - pihole_report_smtp_port is defined
+      - pihole_report_smtp_user | length > 0
+      - pihole_report_smtp_password | length > 0
+    fail_msg: "Define DAILY_REPORT_* variables to enable the Pi-hole report."
+  when: pihole_report_enabled
+  tags: [pihole]
+
+- name: Read Pi-hole API token from config
+  ansible.builtin.command: >
+    awk -F= '/^API_TOKEN=/{print $2}' {{ pihole_data_dir }}/pihole-FTL.conf
+  register: pihole_api_token_lookup
+  changed_when: false
+  failed_when: false
+  when: pihole_report_enabled and (pihole_report_api_token | default('')) | length == 0
+  tags: [pihole]
+
+- name: Set effective Pi-hole API token
+  ansible.builtin.set_fact:
+    pihole_report_api_token: "{{ pihole_api_token_lookup.stdout | default('') }}"
+  when: pihole_report_enabled and (pihole_report_api_token | default('')) | length == 0
+  tags: [pihole]
+
+- name: Install Pi-hole report env file
+  ansible.builtin.template:
+    src: pihole-report.env.j2
+    dest: /etc/pihole-report.env
+    owner: root
+    group: root
+    mode: "0600"
+  when: pihole_report_enabled
+  tags: [pihole]
+
+- name: Install Pi-hole report script
+  ansible.builtin.template:
+    src: pihole-report.py.j2
+    dest: /usr/local/bin/pihole-report.py
+    owner: root
+    group: root
+    mode: "0750"
+  when: pihole_report_enabled
+  tags: [pihole]
+
+- name: Schedule Pi-hole report
+  ansible.builtin.cron:
+    name: "pihole daily report"
+    user: root
+    special_time: "{{ pihole_report_schedule }}"
+    job: ". /etc/pihole-report.env && /usr/local/bin/pihole-report.py"
+  when: pihole_report_enabled
+  tags: [pihole]
+
+- name: Install Pi-hole systemd unit
+  ansible.builtin.template:
+    src: pihole-compose.service.j2
+    dest: /etc/systemd/system/pihole-compose.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: pihole_systemd_autostart
+  tags: [pihole]
+
+- name: Enable Pi-hole compose service
+  ansible.builtin.systemd:
+    name: pihole-compose.service
+    enabled: true
+    daemon_reload: true
+  when: pihole_systemd_autostart
+  tags: [pihole]
+
+- name: Verify Pi-hole admin endpoint
+  ansible.builtin.uri:
+    url: "http://localhost:{{ pihole_web_port }}/admin/"
+    status_code:
+      - 200
+      - 302
+  register: pihole_admin_check
+  retries: 5
+  delay: 2
+  until: pihole_admin_check.status in [200, 302]
+  when: pihole_healthcheck_enabled
+  tags: [pihole]

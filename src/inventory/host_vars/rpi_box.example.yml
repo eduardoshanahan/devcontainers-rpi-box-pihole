@@ -1,0 +1,36 @@
+---
+# Example host_vars for the Raspberry Pi target.
+# Copy this to rpi_box_01.yml (kept out of git via .gitignore) and customize
+# values.
+
+ansible_host: "192.0.2.10"
+ansible_port: 22
+# SSH connection user and private key used by Ansible
+ansible_user: "{{ lookup('env', 'ANSIBLE_USER') }}"
+ansible_ssh_private_key_file: >-
+  {{ lookup('env', 'ANSIBLE_SSH_PRIVATE_KEY_FILE') }}
+
+# Pi-hole configuration
+pihole_web_password: "{{ lookup('env', 'PIHOLE_WEB_PASSWORD') }}"
+pihole_timezone: "{{ lookup('env', 'PIHOLE_TIMEZONE') }}"
+pihole_web_port: "{{ lookup('env', 'PIHOLE_WEB_PORT') }}"
+pihole_network_mode: "{{ lookup('env', 'PIHOLE_NETWORK_MODE') }}"
+pihole_dns1: "{{ lookup('env', 'PIHOLE_DNS1') }}"
+pihole_dns2: "{{ lookup('env', 'PIHOLE_DNS2') }}"
+pihole_dnsmasq_listening: "{{ lookup('env', 'PIHOLE_DNSMASQ_LISTENING') }}"
+pihole_local_ipv4: "{{ lookup('env', 'PIHOLE_LOCAL_IPV4') }}"
+pihole_enable_dhcp: "{{ lookup('env', 'PIHOLE_ENABLE_DHCP') | bool }}"
+
+# Daily report configuration
+pihole_report_email: "{{ lookup('env', 'DAILY_REPORT_EMAIL') }}"
+pihole_report_sender: "{{ lookup('env', 'DAILY_REPORT_SENDER') }}"
+pihole_report_smtp_host: "{{ lookup('env', 'DAILY_REPORT_SMTP_HOST') }}"
+pihole_report_smtp_port: "{{ lookup('env', 'DAILY_REPORT_SMTP_PORT') | int }}"
+pihole_report_smtp_user: "{{ lookup('env', 'DAILY_REPORT_SMTP_USER') }}"
+pihole_report_smtp_password: "{{ lookup('env', 'DAILY_REPORT_SMTP_PASSWORD') }}"
+pihole_report_schedule: "{{ lookup('env', 'DAILY_REPORT_SCHEDULE') }}"
+pihole_report_api_token: "{{ lookup('env', 'PIHOLE_API_TOKEN') }}"
+pihole_report_mode: "{{ lookup('env', 'PIHOLE_REPORT_MODE') }}"
+pihole_container_name: "{{ lookup('env', 'PIHOLE_CONTAINER_NAME') }}"
+pihole_api_password: "{{ lookup('env', 'PIHOLE_API_PASSWORD') }}"
+pihole_systemd_autostart: "{{ lookup('env', 'PIHOLE_SYSTEMD_AUTOSTART') | bool }}"

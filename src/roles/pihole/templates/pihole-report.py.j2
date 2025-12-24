@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+import json
+import os
+import smtplib
+import ssl
+import subprocess
+from datetime import datetime
+from email.message import EmailMessage
+from urllib.error import URLError, HTTPError
+from urllib.parse import urlencode
+from urllib.request import Request, urlopen, build_opener, HTTPCookieProcessor
+from http.cookiejar import CookieJar
+
+
+def fetch_json(url, timeout, opener=None, data=None, content_type=None, extra_headers=None):
+    headers = {"User-Agent": "pihole-report"}
+    if content_type:
+        headers["Content-Type"] = content_type
+    if extra_headers:
+        headers.update(extra_headers)
+    request = Request(url, headers=headers, data=data)
+    handler = opener.open if opener else urlopen
+    with handler(request, timeout=timeout) as response:
+        payload = response.read().decode("utf-8")
+    return json.loads(payload)
+
+
+def format_top(label, items):
+    if not items:
+        return [f"{label}: (none)"]
+    if isinstance(items, dict):
+        top_items = sorted(items.items(), key=lambda kv: kv[1], reverse=True)[:5]
+        return [f"{label}:"] + [f"- {name}: {count}" for name, count in top_items]
+    if isinstance(items, list):
+        top_items = items[:5]
+        lines = [f"{label}:"]
+        for item in top_items:
+            if isinstance(item, dict):
+                name = item.get("domain") or item.get("name") or item.get("query") or "unknown"
+                count = item.get("count") or item.get("total") or item.get("queries") or "n/a"
+                lines.append(f"- {name}: {count}")
+            else:
+                lines.append(f"- {item}")
+        return lines
+    return [f"{label}: (unavailable)"]
+
+
+def load_stats_via_cli(container_name, timeout):
+    try:
+        result = subprocess.run(
+            ["docker", "exec", container_name, "pihole", "-c", "-j"],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
+        raise SystemExit(f"Failed to run Pi-hole CLI: {exc}") from exc
+
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Failed to parse Pi-hole CLI output: {exc}") from exc
+
+
+def main():
+    recipient = os.environ["DAILY_REPORT_EMAIL"]
+    sender = os.environ["DAILY_REPORT_SENDER"]
+    smtp_host = os.environ["DAILY_REPORT_SMTP_HOST"]
+    smtp_port = int(os.environ.get("DAILY_REPORT_SMTP_PORT", "587"))
+    smtp_user = os.environ["DAILY_REPORT_SMTP_USER"]
+    smtp_password = os.environ["DAILY_REPORT_SMTP_PASSWORD"]
+    api_base = os.environ.get("PIHOLE_API_BASE", "http://127.0.0.1/admin/api.php")
+    v6_api_base = os.environ.get("PIHOLE_V6_API_BASE", "http://127.0.0.1")
+    api_token = os.environ.get("PIHOLE_API_TOKEN", "").strip()
+    web_password = os.environ.get("PIHOLE_WEB_PASSWORD", "").strip()
+    api_password = os.environ.get("PIHOLE_API_PASSWORD", "").strip()
+    timeout = float(os.environ.get("PIHOLE_API_TIMEOUT", "5"))
+    report_mode = os.environ.get("PIHOLE_REPORT_MODE", "cli").strip()
+    container_name = os.environ.get("PIHOLE_CONTAINER_NAME", "pihole").strip()
+
+    summary = None
+    top_items = {}
+
+    if report_mode == "cli":
+        try:
+            summary = load_stats_via_cli(container_name, timeout)
+            if isinstance(summary, dict) and (
+                "top_queries" in summary or "top_ads" in summary or "queries" in summary or "blocked" in summary
+            ):
+                top_items = summary
+        except SystemExit:
+            summary = None
+
+    if summary is None and api_token:
+        try:
+            auth_param = f"&auth={api_token}"
+            summary = fetch_json(f"{api_base}?summaryRaw{auth_param}", timeout)
+            top_items = fetch_json(f"{api_base}?topItems{auth_param}", timeout)
+        except (HTTPError, URLError):
+            summary = None
+
+    if summary is None and (api_password or web_password):
+        jar = CookieJar()
+        opener = build_opener(HTTPCookieProcessor(jar))
+        try:
+            auth_url = f"{v6_api_base}/api/auth"
+            auth_password = api_password or web_password
+            auth_payloads = [
+                (json.dumps({"password": auth_password}).encode("utf-8"), "application/json"),
+                (json.dumps({"api_password": auth_password}).encode("utf-8"), "application/json"),
+                (urlencode({"password": auth_password}).encode("utf-8"), "application/x-www-form-urlencoded"),
+                (urlencode({"api_password": auth_password}).encode("utf-8"), "application/x-www-form-urlencoded"),
+            ]
+            auth_response = None
+            for payload, content_type in auth_payloads:
+                try:
+                    auth_response = fetch_json(
+                        auth_url,
+                        timeout,
+                        opener=opener,
+                        data=payload,
+                        content_type=content_type,
+                    )
+                    break
+                except HTTPError as exc:
+                    if exc.code == 401:
+                        continue
+                    raise
+            extra_headers = {}
+            session = auth_response.get("session") if isinstance(auth_response, dict) else None
+            if isinstance(session, dict):
+                csrf = session.get("csrf") or session.get("csrf_token") or session.get("token")
+                sid = session.get("sid")
+                if csrf:
+                    extra_headers["X-CSRF-TOKEN"] = csrf
+                if sid:
+                    extra_headers["Cookie"] = f"sid={sid}"
+                    extra_headers["X-FTL-SID"] = sid
+            summary = fetch_json(
+                f"{v6_api_base}/api/stats/summary",
+                timeout,
+                opener=opener,
+                extra_headers=extra_headers,
+            )
+            top_items = fetch_json(
+                f"{v6_api_base}/api/queries/top",
+                timeout,
+                opener=opener,
+                extra_headers=extra_headers,
+            )
+        except (HTTPError, URLError) as exc:
+            raise SystemExit(f"Failed to fetch Pi-hole stats: {exc}") from exc
+
+    if summary is None:
+        raise SystemExit("Failed to fetch Pi-hole stats: no report data available.")
+
+    lines = [
+        f"Pi-hole Daily Report ({datetime.now().strftime('%Y-%m-%d')})",
+        "",
+        f"DNS queries today: {summary.get('dns_queries_today', summary.get('queries', 'n/a'))}",
+        f"Ads blocked today: {summary.get('ads_blocked_today', summary.get('blocked', 'n/a'))}",
+        f"Percent blocked: {summary.get('ads_percentage_today', summary.get('percent_blocked', 'n/a'))}%",
+        f"Domains on blocklist: {summary.get('domains_being_blocked', summary.get('domains_blocked', 'n/a'))}",
+        f"Unique clients: {summary.get('unique_clients', summary.get('clients', 'n/a'))}",
+        f"Queries forwarded: {summary.get('queries_forwarded', summary.get('forwarded', 'n/a'))}",
+        f"Queries cached: {summary.get('queries_cached', summary.get('cached', 'n/a'))}",
+        "",
+    ]
+
+    if top_items:
+        lines += format_top("Top queries", top_items.get("top_queries", top_items.get("queries", {})))
+        lines.append("")
+        lines += format_top("Top blocked", top_items.get("top_ads", top_items.get("blocked", {})))
+
+    message = EmailMessage()
+    message["Subject"] = f"Pi-hole Daily Report - {datetime.now().strftime('%Y-%m-%d')}"
+    message["From"] = sender
+    message["To"] = recipient
+    message.set_content("\n".join(lines))
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
+        smtp.ehlo()
+        smtp.starttls(context=context)
+        smtp.ehlo()
+        smtp.login(smtp_user, smtp_password)
+        smtp.send_message(message)
+
+
+if __name__ == "__main__":
+    main()
