@@ -1,4 +1,4 @@
-# Raspberry Pi Apps (Ansible)
+# Raspberry Pi Apps (Pihole by way of Ansible)
 
 This repo deploys Docker-based applications to Raspberry Pi hosts that have
 already been provisioned by the [rpi-box project](https://github.com/eduardoshanahan/devcontainers-rpi-box). It is designed to run inside a similar devcontainer workflow and focus only on app stacks (Pi-hole in this case).
