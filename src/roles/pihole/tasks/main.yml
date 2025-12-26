@@ -10,15 +10,36 @@
     fail_msg: "Define required pihole_* variables before applying this role."
   tags: [pihole]
 
-- name: Ensure Pi-hole directories exist
+- name: Ensure Pi-hole compose directory exists
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ pihole_compose_dir }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
+  tags: [pihole]
+
+- name: Ensure Pi-hole data directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ pihole_uid }}"
+    group: "{{ pihole_gid }}"
+    mode: "0755"
   loop:
-    - "{{ pihole_compose_dir }}"
+    - "{{ pihole_data_dir }}"
+    - "{{ pihole_dnsmasq_dir }}"
+  tags: [pihole]
+
+- name: Ensure Pi-hole data directories are writable by the container user
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ pihole_uid }}"
+    group: "{{ pihole_gid }}"
+    mode: "0755"
+    recurse: true
+  loop:
     - "{{ pihole_data_dir }}"
     - "{{ pihole_dnsmasq_dir }}"
   tags: [pihole]
@@ -40,16 +61,31 @@
   tags: [pihole]
 
 - name: Read current Pi-hole web password hash
-  ansible.builtin.command: >
-    docker exec pihole sh -lc "grep -E '^WEBPASSWORD=' /etc/pihole/pihole-FTL.conf | cut -d= -f2 || true"
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - pihole
+      - sh
+      - -lc
+      - >
+        grep -E '^WEBPASSWORD=' /etc/pihole/pihole-FTL.conf
+        | cut -d= -f2 || true
   register: pihole_current_web_password_hash
   changed_when: false
   failed_when: false
   tags: [pihole]
 
 - name: Compute desired Pi-hole web password hash
-  ansible.builtin.command: >
-    python3 -c "import hashlib, os; print(hashlib.sha256(os.environ['PIHOLE_WEB_PASSWORD'].encode()).hexdigest())"
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        import hashlib
+        import os
+        password = os.environ['PIHOLE_WEB_PASSWORD']
+        print(hashlib.sha256(password.encode()).hexdigest())
   register: pihole_desired_web_password_hash
   changed_when: false
   environment:
@@ -60,13 +96,17 @@
 - name: Ensure Pi-hole web password matches
   ansible.builtin.command: >
     docker exec pihole pihole setpassword "{{ pihole_web_password }}"
-  when: pihole_current_web_password_hash.stdout != pihole_desired_web_password_hash.stdout
+  when:
+    - pihole_current_web_password_hash.stdout
+      != pihole_desired_web_password_hash.stdout
+  changed_when: true
   no_log: true
   tags: [pihole]
 
 - name: Determine Pi-hole report enablement
   ansible.builtin.set_fact:
-    pihole_report_enabled: "{{ (pihole_report_email | default('')) | length > 0 }}"
+    pihole_report_enabled: >-
+      {{ (pihole_report_email | default('')) | length > 0 }}
   tags: [pihole]
 
 - name: Ensure report schedule is valid
@@ -95,13 +135,18 @@
   register: pihole_api_token_lookup
   changed_when: false
   failed_when: false
-  when: pihole_report_enabled and (pihole_report_api_token | default('')) | length == 0
+  when:
+    - pihole_report_enabled
+    - (pihole_report_api_token | default('')) | length == 0
   tags: [pihole]
 
 - name: Set effective Pi-hole API token
   ansible.builtin.set_fact:
-    pihole_report_api_token: "{{ pihole_api_token_lookup.stdout | default('') }}"
-  when: pihole_report_enabled and (pihole_report_api_token | default('')) | length == 0
+    pihole_report_api_token: >-
+      {{ pihole_api_token_lookup.stdout | default('') }}
+  when:
+    - pihole_report_enabled
+    - (pihole_report_api_token | default('')) | length == 0
   tags: [pihole]
 
 - name: Install Pi-hole report env file
@@ -129,7 +174,8 @@
     name: "pihole daily report"
     user: root
     special_time: "{{ pihole_report_schedule }}"
-    job: ". /etc/pihole-report.env && /usr/local/bin/pihole-report.py"
+    job: >-
+      . /etc/pihole-report.env && /usr/local/bin/pihole-report.py
   when: pihole_report_enabled
   tags: [pihole]
 

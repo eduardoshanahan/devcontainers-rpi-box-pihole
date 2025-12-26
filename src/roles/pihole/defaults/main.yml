@@ -1,8 +1,15 @@
 ---
 pihole_compose_dir: /srv/apps/pihole
+# Host paths below are bind-mounted to Pi-hole's expected container paths.
+# - {{ pihole_data_dir }} -> /etc/pihole
+# - {{ pihole_dnsmasq_dir }} -> /etc/dnsmasq.d
 pihole_data_dir: /srv/apps/pihole/etc-pihole
 pihole_dnsmasq_dir: /srv/apps/pihole/etc-dnsmasq.d
-pihole_image: "pihole/pihole:latest"
+pihole_uid: 999
+pihole_gid: 999
+# Pin the image tag for repeatable deployments.
+# Bump intentionally when upgrading.
+pihole_image: "pihole/pihole:2025.11.1"
 pihole_timezone: "UTC"
 pihole_web_port: 80
 pihole_web_password: ""
