@@ -14,6 +14,7 @@ already been provisioned by the [rpi-box project](https://github.com/eduardoshan
 
 - Environment variables: [working with environment variables](working%20with%20environment%20variables.md)
 - Usage: [how to use this project.md](how%20to%20use%20this%20project.md)
+- Pi-hole considerations: [considerations about the configuration of pihole with unifi ucg max.md](considerations%20about%20the%20configuration%20of%20pihole%20with%20unifi%20ucg%20max.md)
 - Testing: [how to test.md](how%20to%20test.md)
 
 ## Helpful Scripts
