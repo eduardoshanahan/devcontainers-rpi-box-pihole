@@ -2,12 +2,71 @@
 - name: Ensure required Pi-hole variables are provided
   ansible.builtin.assert:
     that:
+      - pihole_compose_dir is defined
+      - pihole_compose_dir | length > 0
+      - pihole_compose_dir.startswith('/')
+      - pihole_compose_dir.startswith('/srv/apps/')
+      - pihole_data_dir is defined
+      - pihole_data_dir | length > 0
+      - pihole_data_dir.startswith('/')
+      - pihole_data_dir.startswith('/srv/apps/')
+      - pihole_dnsmasq_dir is defined
+      - pihole_dnsmasq_dir | length > 0
+      - pihole_dnsmasq_dir.startswith('/')
+      - pihole_dnsmasq_dir.startswith('/srv/apps/')
+      - pihole_uid is defined
+      - pihole_gid is defined
+      - (pihole_uid | int > 0 and pihole_gid | int > 0)
+        or (pihole_uid | int == 0 and pihole_gid | int == 0)
+      - pihole_image is defined
+      - pihole_image | length > 0
       - pihole_timezone is defined
       - pihole_timezone | length > 0
+      - pihole_web_port is defined
+      - pihole_web_port | int > 0
       - pihole_web_password is defined
       - pihole_web_password | length > 0
+      - pihole_network_mode is defined
+      - pihole_network_mode | length > 0
+      - pihole_dns1 is defined
+      - pihole_dns1 | length > 0
+      - pihole_dns2 is defined
+      - pihole_dns2 | length > 0
+      - pihole_local_ipv4 is defined
+      - pihole_local_ipv4 | length > 0
       - pihole_enable_dhcp is defined
+      - pihole_enable_dhcp is boolean
+      - pihole_dnsmasq_listening is defined
+      - pihole_dnsmasq_listening | length > 0
+      - pihole_healthcheck_enabled is defined
+      - pihole_healthcheck_enabled is boolean
+      - pihole_container_name is defined
+      - pihole_container_name | length > 0
+      - pihole_systemd_autostart is defined
+      - pihole_systemd_autostart is boolean
     fail_msg: "Define required pihole_* variables before applying this role."
+  tags: [pihole]
+
+- name: Set initial Pi-hole UID/GID defaults
+  ansible.builtin.set_fact:
+    pihole_effective_uid: "{{ pihole_uid | int }}"
+    pihole_effective_gid: "{{ pihole_gid | int }}"
+  tags: [pihole]
+
+- name: Verify privilege escalation for Pi-hole filesystem updates
+  ansible.builtin.command: id -u
+  register: pihole_root_check
+  changed_when: false
+  become: true
+  tags: [pihole]
+
+- name: Ensure privilege escalation is available
+  ansible.builtin.assert:
+    that:
+      - pihole_root_check.stdout == "0"
+    fail_msg: >-
+      Pi-hole role needs sudo to manage /srv/apps. Run with --become or grant
+      passwordless sudo.
   tags: [pihole]
 
 - name: Ensure Pi-hole compose directory exists
@@ -19,29 +78,47 @@
     mode: "0755"
   tags: [pihole]
 
-- name: Ensure Pi-hole data directories exist
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    owner: "{{ pihole_uid }}"
-    group: "{{ pihole_gid }}"
-    mode: "0755"
-  loop:
-    - "{{ pihole_data_dir }}"
-    - "{{ pihole_dnsmasq_dir }}"
+- name: Gather service facts
+  ansible.builtin.service_facts:
   tags: [pihole]
 
-- name: Ensure Pi-hole data directories are writable by the container user
+- name: Ensure systemd-resolved drop-in directory exists
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: /etc/systemd/resolved.conf.d
     state: directory
-    owner: "{{ pihole_uid }}"
-    group: "{{ pihole_gid }}"
+    owner: root
+    group: root
     mode: "0755"
-    recurse: true
-  loop:
-    - "{{ pihole_data_dir }}"
-    - "{{ pihole_dnsmasq_dir }}"
+  when: "'systemd-resolved.service' in ansible_facts.services"
+  tags: [pihole]
+
+- name: Disable systemd-resolved stub listener (free port 53)
+  ansible.builtin.blockinfile:
+    path: /etc/systemd/resolved.conf.d/pihole.conf
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    block: |
+      [Resolve]
+      DNSStubListener=no
+  when: "'systemd-resolved.service' in ansible_facts.services"
+  notify: Restart systemd-resolved
+  tags: [pihole]
+
+- name: Ensure resolv.conf points to upstream DNS
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      nameserver {{ pihole_dns1 }}
+      {% if pihole_dns2 | length > 0 %}
+      nameserver {{ pihole_dns2 }}
+      {% endif %}
+  when: "'systemd-resolved.service' in ansible_facts.services"
+  notify: Restart systemd-resolved
   tags: [pihole]
 
 - name: Deploy Pi-hole compose file
@@ -57,10 +134,11 @@
   community.docker.docker_compose_v2:
     project_src: "{{ pihole_compose_dir }}"
     state: present
+    recreate: auto
     wait: true
   tags: [pihole]
 
-- name: Read current Pi-hole web password hash
+- name: Detect Pi-hole UID/GID from container
   ansible.builtin.command:
     argv:
       - docker
@@ -68,39 +146,117 @@
       - pihole
       - sh
       - -lc
-      - >
-        grep -E '^WEBPASSWORD=' /etc/pihole/pihole-FTL.conf
-        | cut -d= -f2 || true
-  register: pihole_current_web_password_hash
+      - "id -u pihole; id -g pihole"
+  register: pihole_detected_ids
   changed_when: false
-  failed_when: false
   tags: [pihole]
 
-- name: Compute desired Pi-hole web password hash
-  ansible.builtin.command:
-    argv:
-      - python3
-      - -c
-      - |
-        import hashlib
-        import os
-        password = os.environ['PIHOLE_WEB_PASSWORD']
-        print(hashlib.sha256(password.encode()).hexdigest())
-  register: pihole_desired_web_password_hash
-  changed_when: false
-  environment:
-    PIHOLE_WEB_PASSWORD: "{{ pihole_web_password }}"
-  no_log: true
-  tags: [pihole]
-
-- name: Ensure Pi-hole web password matches
-  ansible.builtin.command: >
-    docker exec pihole pihole setpassword "{{ pihole_web_password }}"
+- name: Set detected Pi-hole UID/GID
+  ansible.builtin.set_fact:
+    pihole_effective_uid: "{{ pihole_detected_ids.stdout_lines[0] | int }}"
+    pihole_effective_gid: "{{ pihole_detected_ids.stdout_lines[1] | int }}"
   when:
-    - pihole_current_web_password_hash.stdout
-      != pihole_desired_web_password_hash.stdout
-  changed_when: true
-  no_log: true
+    - pihole_detected_ids is defined
+    - (pihole_detected_ids.stdout_lines | default([]))
+      | length >= 2
+  tags: [pihole]
+
+- name: Warn when configured UID/GID differ from container
+  ansible.builtin.debug:
+    msg: >-
+      PIHOLE_UID/PIHOLE_GID ({{ pihole_uid }}:{{ pihole_gid }})
+      differ from container ({{ pihole_effective_uid }}:{{
+      pihole_effective_gid }}).
+      Using container values for ownership fixes.
+  when:
+    - pihole_detected_ids is defined
+    - (pihole_detected_ids.stdout_lines | default([])) | length >= 2
+    - pihole_uid | int != pihole_effective_uid
+      or pihole_gid | int != pihole_effective_gid
+  tags: [pihole]
+
+- name: Ensure effective Pi-hole UID/GID are available
+  ansible.builtin.assert:
+    that:
+      - pihole_effective_uid | int > 0
+      - pihole_effective_gid | int > 0
+    fail_msg: >-
+      Set PIHOLE_UID/PIHOLE_GID or ensure the pihole user exists in the
+      container.
+  tags: [pihole]
+
+- name: Ensure Pi-hole data directories are owned by the container user
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ pihole_effective_uid }}"
+    group: "{{ pihole_effective_gid }}"
+    mode: "0755"
+  loop:
+    - "{{ pihole_data_dir }}"
+    - "{{ pihole_dnsmasq_dir }}"
+  become: true
+  tags: [pihole]
+
+- name: Scan Pi-hole data directories for ownership drift
+  ansible.builtin.find:
+    paths: "{{ item }}"
+    recurse: true
+    file_type: any
+  loop:
+    - "{{ pihole_data_dir }}"
+    - "{{ pihole_dnsmasq_dir }}"
+  register: pihole_ownership_scan
+  become: true
+  tags: [pihole]
+
+- name: Determine if Pi-hole ownership repair is needed
+  ansible.builtin.set_fact:
+    pihole_ownership_needs_fix: >-
+      {{
+        (pihole_ownership_scan.results | map(attribute='files') | flatten
+         | selectattr('uid', 'ne', pihole_effective_uid) | list | length > 0)
+        or
+        (pihole_ownership_scan.results | map(attribute='files') | flatten
+         | selectattr('gid', 'ne', pihole_effective_gid) | list | length > 0)
+      }}
+  tags: [pihole]
+
+- name: Repair Pi-hole data directory ownership recursively when needed
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ pihole_effective_uid }}"
+    group: "{{ pihole_effective_gid }}"
+    recurse: true
+  loop:
+    - "{{ pihole_data_dir }}"
+    - "{{ pihole_dnsmasq_dir }}"
+  when: pihole_ownership_needs_fix
+  become: true
+  tags: [pihole]
+
+- name: Stat Pi-hole config files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ pihole_data_dir }}/pihole-FTL.conf"
+    - "{{ pihole_data_dir }}/pihole.toml"
+    - "{{ pihole_data_dir }}/setupVars.conf"
+  register: pihole_config_files
+  tags: [pihole]
+
+- name: Ensure Pi-hole config files are owned by the container user
+  ansible.builtin.file:
+    path: "{{ item.stat.path }}"
+    owner: "{{ pihole_effective_uid }}"
+    group: "{{ pihole_effective_gid }}"
+  loop: "{{ pihole_config_files.results }}"
+  when:
+    - item.stat.exists
+    - item.stat.uid != pihole_effective_uid
+      or item.stat.gid != pihole_effective_gid
+  become: true
   tags: [pihole]
 
 - name: Determine Pi-hole report enablement
@@ -123,11 +279,13 @@
       - pihole_report_sender | length > 0
       - pihole_report_smtp_host | length > 0
       - pihole_report_smtp_port is defined
+      - pihole_report_smtp_port | int > 0
       - pihole_report_smtp_user | length > 0
       - pihole_report_smtp_password | length > 0
     fail_msg: "Define DAILY_REPORT_* variables to enable the Pi-hole report."
   when: pihole_report_enabled
   tags: [pihole]
+
 
 - name: Read Pi-hole API token from config
   ansible.builtin.command: >

@@ -1,0 +1,5 @@
+# 2025-12-29
+
+- Pihole is working correctly in two Raspberry Pi 4.
+- I am able to edit the settings and store them in both.
+- Synchronisation is not surretly working. I am dubious that the current approach in the Ansible scripts is correct, the changes in the last two days look more random than certain.

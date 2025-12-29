@@ -12,14 +12,22 @@ ansible_ssh_private_key_file: >-
 
 # Pi-hole configuration
 pihole_web_password: "{{ lookup('env', 'PIHOLE_WEB_PASSWORD') }}"
+pihole_compose_dir: "{{ lookup('env', 'PIHOLE_COMPOSE_DIR') }}"
+pihole_data_dir: "{{ lookup('env', 'PIHOLE_DATA_DIR') }}"
+pihole_dnsmasq_dir: "{{ lookup('env', 'PIHOLE_DNSMASQ_DIR') }}"
+pihole_uid: "{{ lookup('env', 'PIHOLE_UID') | int }}"
+pihole_gid: "{{ lookup('env', 'PIHOLE_GID') | int }}"
+pihole_image: "{{ lookup('env', 'PIHOLE_IMAGE') }}"
 pihole_timezone: "{{ lookup('env', 'PIHOLE_TIMEZONE') }}"
 pihole_web_port: "{{ lookup('env', 'PIHOLE_WEB_PORT') }}"
 pihole_network_mode: "{{ lookup('env', 'PIHOLE_NETWORK_MODE') }}"
 pihole_dns1: "{{ lookup('env', 'PIHOLE_DNS1') }}"
 pihole_dns2: "{{ lookup('env', 'PIHOLE_DNS2') }}"
 pihole_dnsmasq_listening: "{{ lookup('env', 'PIHOLE_DNSMASQ_LISTENING') }}"
-pihole_local_ipv4: "{{ lookup('env', 'PIHOLE_LOCAL_IPV4') }}"
+pihole_local_ipv4: "{{ ansible_host }}"
 pihole_enable_dhcp: "{{ lookup('env', 'PIHOLE_ENABLE_DHCP') | bool }}"
+pihole_healthcheck_enabled: >-
+  {{ lookup('env', 'PIHOLE_HEALTHCHECK_ENABLED') | bool }}
 
 # Daily report configuration
 pihole_report_email: "{{ lookup('env', 'DAILY_REPORT_EMAIL') }}"
@@ -33,4 +41,5 @@ pihole_report_api_token: "{{ lookup('env', 'PIHOLE_API_TOKEN') }}"
 pihole_report_mode: "{{ lookup('env', 'PIHOLE_REPORT_MODE') }}"
 pihole_container_name: "{{ lookup('env', 'PIHOLE_CONTAINER_NAME') }}"
 pihole_api_password: "{{ lookup('env', 'PIHOLE_API_PASSWORD') }}"
-pihole_systemd_autostart: "{{ lookup('env', 'PIHOLE_SYSTEMD_AUTOSTART') | bool }}"
+pihole_systemd_autostart: >-
+  {{ lookup('env', 'PIHOLE_SYSTEMD_AUTOSTART') | bool }}

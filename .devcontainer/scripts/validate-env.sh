@@ -23,7 +23,7 @@ declare -A required_vars=(
     ["PIHOLE_WEB_PORT"]="Pi-hole web port|^[0-9]+$"
     ["PIHOLE_DNS1"]="Pi-hole upstream DNS 1|^.+$"
     ["PIHOLE_DNS2"]="Pi-hole upstream DNS 2|^.+$"
-    ["PIHOLE_LOCAL_IPV4"]="Pi-hole local IPv4|^.+$"
+    # ["PIHOLE_LOCAL_IPV4"]="Pi-hole local IPv4|^.+$"
     ["PIHOLE_ENABLE_DHCP"]="Pi-hole DHCP enable flag|^(true|false)$"
 )
 

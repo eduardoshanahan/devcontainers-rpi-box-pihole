@@ -1,0 +1,5 @@
+# 2027-12-27
+
+- Reviewed project structure, docs, playbooks, and the `pihole` role.
+- Updated the yaml output settings to use `ansible.builtin.default` with `result_format = yaml`.
+- Resolved LAN DNS reachability for Pi-hole (host networking + DNS listening).

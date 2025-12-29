@@ -1,0 +1,4 @@
+# 2025-12-29
+
+- Investigate from the original site of Pihole, and from other sites available on the Internet, how to implement DNS synchronisation with Pihole v6.
+- Keep in mind that the approaches for v5 are not valid anymore, and the existing examples on the Internet might be misleading because the code and explanation could be for v5 and have no express indication of that.

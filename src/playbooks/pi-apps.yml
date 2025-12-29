@@ -1,6 +1,6 @@
 ---
 - name: Deploy Raspberry Pi applications
-  hosts: raspberry_pi
+  hosts: raspberry_pi_boxes
   become: true
   gather_facts: true
   roles:

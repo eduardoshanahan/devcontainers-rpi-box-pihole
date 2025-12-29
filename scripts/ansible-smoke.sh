@@ -8,7 +8,7 @@ ANSIBLE_CFG="${ANSIBLE_ROOT}/ansible.cfg"
 INVENTORY_DIR="${ANSIBLE_ROOT}/inventory"
 if [ $# -lt 2 ]; then
     printf 'Usage: %s /path/to/playbook.yml /path/to/inventory.ini\n' "$0" >&2
-    printf 'Optional: set SMOKE_GROUP to override the default host group (default: raspberry_pi).\n' >&2
+    printf 'Optional: set SMOKE_GROUP to override the default host group (default: _boxes).\n' >&2
     exit 1
 fi
 
@@ -23,7 +23,7 @@ fi
 export ANSIBLE_CONFIG="$ANSIBLE_CFG"
 export ANSIBLE_INVENTORY="$INVENTORY_DIR"
 
-SMOKE_GROUP="${SMOKE_GROUP:-raspberry_pi}"
+SMOKE_GROUP="${SMOKE_GROUP:-raspberry_pi_boxes}"
 
 echo ">>> Ansible version"
 ansible --version | head -n 2

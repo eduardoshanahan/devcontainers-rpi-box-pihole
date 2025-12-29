@@ -1,34 +1,34 @@
 ---
-pihole_compose_dir: /srv/apps/pihole
+pihole_compose_dir: ""
 # Host paths below are bind-mounted to Pi-hole's expected container paths.
 # - {{ pihole_data_dir }} -> /etc/pihole
 # - {{ pihole_dnsmasq_dir }} -> /etc/dnsmasq.d
-pihole_data_dir: /srv/apps/pihole/etc-pihole
-pihole_dnsmasq_dir: /srv/apps/pihole/etc-dnsmasq.d
-pihole_uid: 999
-pihole_gid: 999
+pihole_data_dir: ""
+pihole_dnsmasq_dir: ""
+pihole_uid: ""
+pihole_gid: ""
 # Pin the image tag for repeatable deployments.
 # Bump intentionally when upgrading.
-pihole_image: "pihole/pihole:2025.11.1"
-pihole_timezone: "UTC"
-pihole_web_port: 80
+pihole_image: ""
+pihole_timezone: ""
+pihole_web_port: ""
 pihole_web_password: ""
-pihole_network_mode: "host"
-pihole_dns1: "1.1.1.1"
-pihole_dns2: "1.0.0.1"
+pihole_network_mode: ""
+pihole_dns1: ""
+pihole_dns2: ""
 pihole_local_ipv4: ""
-pihole_enable_dhcp: false
-pihole_dnsmasq_listening: "all"
-pihole_healthcheck_enabled: true
+pihole_enable_dhcp: ""
+pihole_dnsmasq_listening: ""
+pihole_healthcheck_enabled: ""
 pihole_report_email: ""
 pihole_report_sender: ""
 pihole_report_smtp_host: ""
-pihole_report_smtp_port: 587
+pihole_report_smtp_port: ""
 pihole_report_smtp_user: ""
 pihole_report_smtp_password: ""
-pihole_report_schedule: "daily"
+pihole_report_schedule: ""
 pihole_report_api_token: ""
-pihole_report_mode: "cli"
-pihole_container_name: "pihole"
+pihole_report_mode: ""
+pihole_container_name: ""
 pihole_api_password: ""
-pihole_systemd_autostart: true
+pihole_systemd_autostart: ""

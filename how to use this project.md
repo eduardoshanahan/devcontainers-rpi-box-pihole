@@ -18,14 +18,15 @@ and use this repo for app-specific roles and playbooks.
    - `ANSIBLE_COLLECTIONS_PATH=/workspace/src/collections:/home/<your-username>/.ansible/collections`
    - `ANSIBLE_ROLES_PATH=/workspace/src/roles`
    - `ANSIBLE_USER`, `ANSIBLE_SSH_PRIVATE_KEY_FILE`
-   - `PIHOLE_WEB_PASSWORD`, `PIHOLE_TIMEZONE`, `PIHOLE_WEB_PORT`
-   - `PIHOLE_NETWORK_MODE`, `PIHOLE_DNS1`, `PIHOLE_DNS2`, `PIHOLE_DNSMASQ_LISTENING`
-   - `PIHOLE_LOCAL_IPV4`, `PIHOLE_ENABLE_DHCP`
+   - `PIHOLE_WEB_PASSWORD`, `PIHOLE_COMPOSE_DIR`, `PIHOLE_DATA_DIR`, `PIHOLE_DNSMASQ_DIR`, `PIHOLE_UID`, `PIHOLE_GID`
+   - `PIHOLE_IMAGE`, `PIHOLE_TIMEZONE`, `PIHOLE_WEB_PORT`
+   - `PIHOLE_NETWORK_MODE`, `PIHOLE_DNS1`, `PIHOLE_DNS2`, `PIHOLE_DNSMASQ_LISTENING`, `PIHOLE_HEALTHCHECK_ENABLED`
+   - `PIHOLE_ENABLE_DHCP`
 
-The devcontainer loads these variables from `.env`, so keeping them here makes
-the configuration obvious and versioned via `.env.example`.
-The Pi-hole role will also keep the web password in sync with
-`PIHOLE_WEB_PASSWORD` on each run.
+   The devcontainer loads these variables from `.env`, so keeping them here makes
+   the configuration obvious and versioned via `.env.example`.
+   The Pi-hole role will also keep the web password in sync with
+   `PIHOLE_WEB_PASSWORD` on each run.
 
 3. Install required Ansible collections:
 
@@ -65,6 +66,7 @@ while keeping data in `/srv/apps/pihole`.
 
 2. Edit `src/inventory/host_vars/rpi_box_01.yml` with the correct `ansible_host` and `ansible_port`.
 3. Confirm the Pi-hole values are present in `.env` (or override them in host vars).
+   - `pihole_local_ipv4` is per-host and is set to `ansible_host` in the example host vars.
 
 ## 3. Verify Ansible Connectivity
 
