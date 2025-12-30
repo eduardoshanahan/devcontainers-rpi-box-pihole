@@ -1,0 +1,309 @@
+#!/usr/bin/env python3
+import json
+import os
+import ssl
+import time
+import urllib.parse
+import urllib.error
+import urllib.request
+from http.cookiejar import CookieJar
+
+
+def log(message):
+    print(f"[pihole-sync] {message}", flush=True)
+
+
+def build_opener():
+    jar = CookieJar()
+    handler = urllib.request.HTTPCookieProcessor(jar)
+    context = ssl._create_unverified_context()
+    opener = urllib.request.build_opener(handler, urllib.request.HTTPSHandler(context=context))
+    return opener, jar
+
+
+def request_json(opener, url, method="GET", headers=None, payload=None):
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method=method)
+    for key, value in (headers or {}).items():
+        req.add_header(key, value)
+    try:
+        with opener.open(req, timeout=10) as resp:
+            body = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        return None, f"request failed: HTTP {exc.code} {exc.reason} for {url}"
+    except Exception as exc:
+        return None, f"request failed: {exc}"
+    try:
+        return json.loads(body), None
+    except json.JSONDecodeError:
+        return None, f"invalid json: {body[:200]}"
+
+
+def auth_session(opener, base_url, password):
+    payload = {"password": password}
+    data, err = request_json(
+        opener,
+        f"{base_url}/auth",
+        method="POST",
+        headers={"Content-Type": "application/json"},
+        payload=payload,
+    )
+    if err:
+        return None, err
+    session = (data or {}).get("session", {})
+    if not session.get("valid"):
+        return None, f"auth failed: {data}"
+    return session, None
+
+
+def config_headers(session):
+    headers = {}
+    csrf = session.get("csrf")
+    sid = session.get("sid")
+    if csrf:
+        headers["X-CSRF-Token"] = csrf
+    if sid:
+        headers["X-FTL-SID"] = sid
+    return headers
+
+
+def list_sync(opener, base_url, headers, key, desired, current):
+    desired_set = set(desired)
+    current_set = set(current)
+    adds = desired_set - current_set
+    removes = current_set - desired_set
+
+    if key == "hosts":
+        def host_path(value):
+            parts = str(value).split()
+            if len(parts) < 2:
+                return None
+            ip = urllib.parse.quote(parts[0], safe='')
+            name = urllib.parse.quote(" ".join(parts[1:]), safe='')
+            return f"{base_url}/config/dns/hosts/{ip}/{name}"
+        for value in sorted(adds):
+            path = host_path(value)
+            if not path:
+                return f"invalid host entry: {value}"
+            _, err = request_json(opener, path, method="PUT", headers=headers)
+            if err:
+                return err
+        for value in sorted(removes):
+            path = host_path(value)
+            if not path:
+                return f"invalid host entry: {value}"
+            _, err = request_json(opener, path, method="DELETE", headers=headers)
+            if err:
+                return err
+        return None
+
+    if key == "cnameRecords":
+        def cname_path(value):
+            if isinstance(value, dict):
+                name = value.get("name") or value.get("domain")
+                target = value.get("target")
+                if not name or not target:
+                    return None
+                return (
+                    f"{base_url}/config/dns/cnameRecords/"
+                    f"{urllib.parse.quote(str(name), safe='')}/"
+                    f"{urllib.parse.quote(str(target), safe='')}"
+                )
+            parts = str(value).split()
+            if len(parts) < 2:
+                return None
+            name = urllib.parse.quote(parts[0], safe='')
+            target = urllib.parse.quote(parts[1], safe='')
+            return f"{base_url}/config/dns/cnameRecords/{name}/{target}"
+        for value in sorted(adds, key=str):
+            path = cname_path(value)
+            if not path:
+                return f"invalid cname entry: {value}"
+            _, err = request_json(opener, path, method="PUT", headers=headers)
+            if err:
+                return err
+        for value in sorted(removes, key=str):
+            path = cname_path(value)
+            if not path:
+                return f"invalid cname entry: {value}"
+            _, err = request_json(opener, path, method="DELETE", headers=headers)
+            if err:
+                return err
+        return None
+
+    if key == "revServers":
+        def rev_path(value):
+            if isinstance(value, dict):
+                cidr = value.get("cidr") or value.get("network")
+                target = value.get("target") or value.get("server")
+                domain = value.get("domain")
+                if not cidr or not target or not domain:
+                    return None
+                return (
+                    f"{base_url}/config/dns/revServers/"
+                    f"{urllib.parse.quote(str(cidr), safe='')}/"
+                    f"{urllib.parse.quote(str(target), safe='')}/"
+                    f"{urllib.parse.quote(str(domain), safe='')}"
+                )
+            parts = str(value).split()
+            if len(parts) < 3:
+                return None
+            cidr = urllib.parse.quote(parts[0], safe='')
+            target = urllib.parse.quote(parts[1], safe='')
+            domain = urllib.parse.quote(parts[2], safe='')
+            return f"{base_url}/config/dns/revServers/{cidr}/{target}/{domain}"
+        for value in sorted(adds, key=str):
+            path = rev_path(value)
+            if not path:
+                return f"invalid revServer entry: {value}"
+            _, err = request_json(opener, path, method="PUT", headers=headers)
+            if err:
+                return err
+        for value in sorted(removes, key=str):
+            path = rev_path(value)
+            if not path:
+                return f"invalid revServer entry: {value}"
+            _, err = request_json(opener, path, method="DELETE", headers=headers)
+            if err:
+                return err
+        return None
+
+    for value in sorted(adds):
+        _, err = request_json(
+            opener,
+            f"{base_url}/config/dns/{key}/{urllib.parse.quote(str(value), safe='')}",
+            method="PUT",
+            headers=headers,
+        )
+        if err:
+            return err
+    for value in sorted(removes):
+        _, err = request_json(
+            opener,
+            f"{base_url}/config/dns/{key}/{urllib.parse.quote(str(value), safe='')}",
+            method="DELETE",
+            headers=headers,
+        )
+        if err:
+            return err
+    return None
+
+
+def main():
+    primary = os.environ.get("PRIMARY_PIHOLE")
+    interval = int(os.environ.get("SYNC_INTERVAL", "300"))
+    password = os.environ.get("PIHOLE_PASSWORD")
+    local_api = os.environ.get("LOCAL_PIHOLE_API", "http://127.0.0.1/api").rstrip("/")
+
+    if not primary:
+        raise SystemExit("PRIMARY_PIHOLE is required on replicas")
+    if not password:
+        raise SystemExit("PIHOLE_PASSWORD is required")
+
+    primary_base = primary.rstrip("/") + "/api"
+
+    log(f"starting; primary={primary} interval={interval}s")
+    backoff = 30
+    last_error = None
+    last_error_count = 0
+    unsupported_keys = set()
+
+    def log_error(message):
+        nonlocal last_error, last_error_count, backoff
+        if message == last_error:
+            last_error_count += 1
+            if last_error_count % 5 != 0:
+                return
+            log(f"{message} (repeated {last_error_count}x)")
+        else:
+            last_error = message
+            last_error_count = 1
+            log(message)
+        backoff = min(interval, backoff * 2)
+
+    def reset_backoff():
+        nonlocal backoff, last_error, last_error_count
+        backoff = 30
+        last_error = None
+        last_error_count = 0
+
+    while True:
+        primary_opener, _ = build_opener()
+        local_opener, _ = build_opener()
+
+        primary_session, err = auth_session(primary_opener, primary_base, password)
+        if err:
+            log_error(err)
+            time.sleep(backoff)
+            continue
+
+        local_session, err = auth_session(local_opener, local_api, password)
+        if err:
+            log_error(f"local auth failed: {err}")
+            time.sleep(backoff)
+            continue
+
+        export_headers = config_headers(primary_session)
+        export_data, err = request_json(
+            primary_opener,
+            f"{primary_base}/config/dns",
+            headers=export_headers,
+        )
+        if err or "config" not in (export_data or {}):
+            log_error(f"export failed: {err or export_data}")
+            time.sleep(backoff)
+            continue
+
+        dns_config = export_data["config"].get("dns")
+        if dns_config is None:
+            log_error(f"export failed: missing dns config in {export_data}")
+            time.sleep(backoff)
+            continue
+
+        local_headers = config_headers(local_session)
+        local_dns_data, err = request_json(
+            local_opener,
+            f"{local_api}/config/dns",
+            headers=local_headers,
+        )
+        if err or "config" not in (local_dns_data or {}):
+            log_error(f"local config fetch failed: {err or local_dns_data}")
+            time.sleep(backoff)
+            continue
+
+        local_dns = local_dns_data["config"].get("dns", {})
+
+        list_keys = ["upstreams", "hosts", "cnameRecords", "revServers"]
+        for key in list_keys:
+            if key in unsupported_keys:
+                continue
+            desired_list = dns_config.get(key, [])
+            current_list = local_dns.get(key, [])
+            if not isinstance(desired_list, list) or not isinstance(current_list, list):
+                log(f"skip {key}: expected list")
+                continue
+            err = list_sync(local_opener, local_api, local_headers, key, desired_list, current_list)
+            if err:
+                if "HTTP 404" in err:
+                    unsupported_keys.add(key)
+                    log_error(f"import failed: {err} (disabling {key})")
+                else:
+                    log_error(f"import failed: {err}")
+                time.sleep(backoff)
+                break
+        else:
+            reset_backoff()
+            log(f"sync ok; sleeping {interval}s")
+            time.sleep(interval)
+            continue
+
+        continue
+
+        log(f"sync ok; sleeping {interval}s")
+        time.sleep(interval)
+
+
+if __name__ == "__main__":
+    main()

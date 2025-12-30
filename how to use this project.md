@@ -101,6 +101,19 @@ The Pi-hole role can send a daily email with summary stats and top queries.
 5. (Optional) Set `PIHOLE_API_TOKEN` if you want to use the legacy API flow.
 6. Re-run the playbook to install the report script and cron job.
 
+## 4.2 Pi-hole Sync (Primary/Replica)
+
+Pi-hole v6 supports API-based config sync. Configure the primary via the UI,
+and let replicas pull from it.
+
+1. Set `PIHOLE_SYNC_ENABLED=false` on the primary.
+2. On each replica, set:
+   - `PIHOLE_SYNC_ENABLED=true`
+   - `PIHOLE_SYNC_PRIMARY_URL=https://pihole-primary.local`
+   - `PIHOLE_SYNC_INTERVAL=300`
+   - `PIHOLE_SYNC_PASSWORD` if the API/UI password differs from `PIHOLE_WEB_PASSWORD`
+3. Re-run the playbook for replicas to install the sync sidecar.
+
 ## 5. LAN DNS Setup (UCG Max)
 
 If the UCG Max manages DHCP, set the LAN DNS server to the Pi-hole IP so

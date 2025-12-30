@@ -2,3 +2,23 @@
 
 - Created the directory lm with the three directories state, plans and recap.
 - Populated the initial files.
+- Added Pi-hole v6 API sync sidecar support with replica-only enablement and new sync variables/templates.
+- Wired sync variables into real host vars (primary disabled, secondary enabled) and removed unused BRANCH/FORCE_PULL env vars.
+- Updated sync script to use JSON auth and local session/CSRF when importing config.
+- Added error-response logging to the sync script for auth/export failures.
+- Added CSRF header support for primary config export.
+- Added X-FTL-SID header support for primary export and local import.
+- Added import response validation/logging for sync troubleshooting.
+- Switched config import to PUT for Pi-hole v6 config apply.
+- Replaced the sync shell script with a Python implementation that parses config JSON and PUTs `{config: ...}`.
+- Updated sync to read/write `/api/config/dns` payloads for DNS settings.
+- Adjusted DNS sync payload to use `{dns: ...}` and added 429 backoff on import.
+- Switched DNS sync to per-key PUT/DELETE on `/api/config/dns/<key>/<value>` to satisfy API path depth rules.
+- Added host record sync via `/api/config/dns/hosts/<ip>/<name>` and limited list sync to upstreams/hosts.
+- Improved sync error logging to include HTTP status and URL.
+- Discovered `/api/config` is read-only; writable endpoints are per-key under `/api/config/dns/...` and require CSRF + X-FTL-SID headers.
+- Verified `/api/config/dns` GET works; PUT to `/api/config/dns` returns bad_request (path depth); PUT `/api/config/dns/upstreams/<ip>` succeeds and returns “item already present” when duplicate.
+- Local API sessions hit `api_seats_exceeded`; increased `webserver.api.max_sessions` in `/srv/apps/pihole/etc-pihole/pihole.toml` on rpi-box-02 (now 64) and restarted `pihole`.
+- Current blocker: sync still returns 404 on import; need to capture exact failing URL after deploying latest script with enhanced logging.
+- Found failing URL: `/api/config/dns/domainNeeded/true` returns 404; removed scalar DNS key sync, now only upstreams + hosts are updated.
+- Added log backoff/deduping, per-key disable on 404, and support for cnameRecords/revServers using per-key endpoints.

@@ -110,3 +110,6 @@ src/collections/ansible_collections/
 
 # Local Ansible runtime data
 .ansible/
+
+# Working memory is a scratch pad for temporary notes
+working_memory.md

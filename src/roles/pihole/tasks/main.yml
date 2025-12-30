@@ -47,6 +47,41 @@
     fail_msg: "Define required pihole_* variables before applying this role."
   tags: [pihole]
 
+- name: Determine Pi-hole sync enablement
+  ansible.builtin.set_fact:
+    pihole_sync_enabled: "{{ pihole_sync_enabled | default(false) | bool }}"
+  tags: [pihole]
+
+- name: Ensure Pi-hole sync variables are provided
+  ansible.builtin.assert:
+    that:
+      - pihole_sync_primary_url is defined
+      - pihole_sync_primary_url | length > 0
+      - pihole_sync_primary_url is match('^https?://')
+      - pihole_sync_interval is defined
+      - pihole_sync_interval | int > 0
+      - pihole_sync_image is defined
+      - pihole_sync_image | length > 0
+    fail_msg: >-
+      Define PIHOLE_SYNC_PRIMARY_URL, PIHOLE_SYNC_INTERVAL, and
+      PIHOLE_SYNC_IMAGE for replica nodes.
+  when: pihole_sync_enabled
+  tags: [pihole]
+
+- name: Determine Pi-hole sync password
+  ansible.builtin.set_fact:
+    pihole_sync_password_effective: >-
+      {{
+        (pihole_sync_password | default('') | length > 0)
+        | ternary(
+          pihole_sync_password,
+          (pihole_api_password | default('') | length > 0)
+          | ternary(pihole_api_password, pihole_web_password)
+        )
+      }}
+  when: pihole_sync_enabled
+  tags: [pihole]
+
 - name: Set initial Pi-hole UID/GID defaults
   ansible.builtin.set_fact:
     pihole_effective_uid: "{{ pihole_uid | int }}"
@@ -76,6 +111,26 @@
     owner: root
     group: root
     mode: "0755"
+  tags: [pihole]
+
+- name: Ensure Pi-hole sync directory exists
+  ansible.builtin.file:
+    path: "{{ pihole_compose_dir }}/sync"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: pihole_sync_enabled
+  tags: [pihole]
+
+- name: Install Pi-hole sync script
+  ansible.builtin.template:
+    src: pihole-sync.py.j2
+    dest: "{{ pihole_compose_dir }}/sync/sync.py"
+    owner: root
+    group: root
+    mode: "0755"
+  when: pihole_sync_enabled
   tags: [pihole]
 
 - name: Gather service facts

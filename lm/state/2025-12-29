@@ -2,4 +2,22 @@
 
 - Pihole is working correctly in two Raspberry Pi 4.
 - I am able to edit the settings and store them in both.
-- Synchronisation is not surretly working. I am dubious that the current approach in the Ansible scripts is correct, the changes in the last two days look more random than certain.
+- Synchronisation is not currently working. I am dubious that the current approach in the Ansible scripts is correct, the changes in the last two days look more random than certain.
+- Added a replica-side Pi-hole v6 API sync service to pull `/api/config` from the primary (enable per-host via new sync variables).
+- Synch variables now wired in host-specific vars (primary disabled, secondary enabled); removed unused BRANCH/FORCE_PULL env vars.
+- Sync script now uses JSON auth and local session/CSRF for config imports.
+- Sync script now logs auth/export response bodies to aid troubleshooting.
+- Sync script now sends CSRF header when exporting config from the primary.
+- Sync script now sends X-FTL-SID header for primary export and local import.
+- Sync script now logs import response bodies to spot apply failures.
+- Sync script now uses PUT when applying config to replicas.
+- Sync script now uses Python to parse config JSON and PUT the config payload.
+- Sync script now targets `/api/config/dns` for DNS settings sync.
+- Sync script now PUTs `{dns: ...}` payload and backs off on 429 errors.
+- Sync script now uses per-key PUT/DELETE endpoints under `/api/config/dns` for list/scalar updates.
+- Sync script now syncs hosts via `/api/config/dns/hosts/<ip>/<name>` and limits list updates to upstreams/hosts.
+- Sync script now logs HTTP status and URL for failing API calls.
+- Sync still failing on rpi-box-02 with 404 import errors; need to redeploy latest script and capture the exact failing URL from logs.
+- API session limits can block auth; `webserver.api.max_sessions` was raised to 64 on rpi-box-02.
+- Identified failing endpoint `/api/config/dns/domainNeeded/true`; scalar DNS key sync disabled, now only upstreams + hosts are applied.
+- Sync script now includes error backoff/deduping, supports cnameRecords/revServers via per-key endpoints, and disables unsupported keys after 404.

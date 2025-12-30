@@ -32,3 +32,8 @@ pihole_report_mode: ""
 pihole_container_name: ""
 pihole_api_password: ""
 pihole_systemd_autostart: ""
+pihole_sync_enabled: false
+pihole_sync_primary_url: ""
+pihole_sync_interval: 300
+pihole_sync_image: "python:3.12-alpine"
+pihole_sync_password: ""

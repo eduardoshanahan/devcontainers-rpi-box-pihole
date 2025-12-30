@@ -1,3 +1,7 @@
+{% set pihole_sync_enabled = pihole_sync_enabled | default(false) | bool %}
+{% if pihole_sync_enabled %}
+{% set pihole_sync_local_api = "http://127.0.0.1/api" if pihole_network_mode == "host" else "http://pihole/api" %}
+{% endif %}
 services:
   pihole:
     image: "{{ pihole_image }}"
@@ -34,4 +38,23 @@ services:
 {% if pihole_dns2 | length > 0 %}
       - {{ pihole_dns2 | to_json }}
 {% endif %}
+{% endif %}
+{% if pihole_sync_enabled %}
+  pihole-sync:
+    image: "{{ pihole_sync_image }}"
+    container_name: pihole-sync
+    restart: unless-stopped
+    depends_on:
+      - pihole
+{% if pihole_network_mode == "host" %}
+    network_mode: "host"
+{% endif %}
+    environment:
+      PRIMARY_PIHOLE: "{{ pihole_sync_primary_url }}"
+      SYNC_INTERVAL: "{{ pihole_sync_interval }}"
+      PIHOLE_PASSWORD: "{{ pihole_sync_password_effective }}"
+      LOCAL_PIHOLE_API: "{{ pihole_sync_local_api }}"
+    volumes:
+      - "{{ pihole_compose_dir }}/sync:/sync:ro"
+    entrypoint: ["python3", "/sync/sync.py"]
 {% endif %}
