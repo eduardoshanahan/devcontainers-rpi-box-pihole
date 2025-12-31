@@ -1,0 +1,6 @@
+# 2025-12-31
+
+- Source `/workspace/.env` and re-run the Pi-hole playbook to deploy the updated sync script and new host_var lookups.
+- Confirm `pihole-sync` logs no longer show 404s for host entries and the replica UI reflects primary DNS changes.
+- If `api_seats_exceeded` appears again, verify `webserver.api.max_sessions` was applied in `pihole.toml` and restart Pi-hole.
+- Completed: set `webserver.api.max_sessions = 64`, restarted Pi-hole, and reran the playbook successfully.

@@ -21,3 +21,6 @@
 - API session limits can block auth; `webserver.api.max_sessions` was raised to 64 on rpi-box-02.
 - Identified failing endpoint `/api/config/dns/domainNeeded/true`; scalar DNS key sync disabled, now only upstreams + hosts are applied.
 - Sync script now includes error backoff/deduping, supports cnameRecords/revServers via per-key endpoints, and disables unsupported keys after 404.
+- Deployment now verifies sync convergence (primary vs replica DNS settings) and fails on mismatch.
+- Sync verification parsing fixed by splitting auth content capture before extracting sid/csrf.
+- Sync script no longer uses default interval/local API; `PIHOLE_SYNC_LOCAL_API`, `PIHOLE_SYNC_VERIFY`, and `PIHOLE_SYNC_VERIFY_DELAY` must be set explicitly.

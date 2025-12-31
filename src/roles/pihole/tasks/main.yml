@@ -44,12 +44,16 @@
       - pihole_container_name | length > 0
       - pihole_systemd_autostart is defined
       - pihole_systemd_autostart is boolean
+      - pihole_api_max_sessions is defined
+      - pihole_api_max_sessions | int > 0
+      - pihole_sync_enabled is defined
+      - pihole_sync_enabled is boolean
     fail_msg: "Define required pihole_* variables before applying this role."
   tags: [pihole]
 
 - name: Determine Pi-hole sync enablement
   ansible.builtin.set_fact:
-    pihole_sync_enabled: "{{ pihole_sync_enabled | default(false) | bool }}"
+    pihole_sync_enabled: "{{ pihole_sync_enabled | bool }}"
   tags: [pihole]
 
 - name: Ensure Pi-hole sync variables are provided
@@ -62,23 +66,21 @@
       - pihole_sync_interval | int > 0
       - pihole_sync_image is defined
       - pihole_sync_image | length > 0
+      - pihole_sync_backoff_seconds is defined
+      - pihole_sync_backoff_seconds | int > 0
+      - pihole_sync_password is defined
+      - pihole_sync_password | length > 0
+      - pihole_sync_local_api is defined
+      - pihole_sync_local_api | length > 0
+      - pihole_sync_verify is defined
+      - pihole_sync_verify is boolean
+      - pihole_sync_verify_delay is defined
+      - pihole_sync_verify_delay | int > 0
     fail_msg: >-
       Define PIHOLE_SYNC_PRIMARY_URL, PIHOLE_SYNC_INTERVAL, and
-      PIHOLE_SYNC_IMAGE for replica nodes.
-  when: pihole_sync_enabled
-  tags: [pihole]
-
-- name: Determine Pi-hole sync password
-  ansible.builtin.set_fact:
-    pihole_sync_password_effective: >-
-      {{
-        (pihole_sync_password | default('') | length > 0)
-        | ternary(
-          pihole_sync_password,
-          (pihole_api_password | default('') | length > 0)
-          | ternary(pihole_api_password, pihole_web_password)
-        )
-      }}
+      PIHOLE_SYNC_IMAGE, PIHOLE_SYNC_BACKOFF_SECONDS,
+      PIHOLE_SYNC_PASSWORD, PIHOLE_SYNC_LOCAL_API, PIHOLE_SYNC_VERIFY, and
+      PIHOLE_SYNC_VERIFY_DELAY for replica nodes.
   when: pihole_sync_enabled
   tags: [pihole]
 
@@ -130,6 +132,16 @@
     owner: root
     group: root
     mode: "0755"
+  notify: Restart pihole-sync container
+  when: pihole_sync_enabled
+  tags: [pihole]
+
+- name: Determine Pi-hole sync verification retries
+  ansible.builtin.set_fact:
+    pihole_sync_verify_retries: >-
+      {{
+        ((pihole_sync_interval | int) // (pihole_sync_verify_delay | int)) + 2
+      }}
   when: pihole_sync_enabled
   tags: [pihole]
 
@@ -191,6 +203,24 @@
     state: present
     recreate: auto
     wait: true
+  tags: [pihole]
+
+- name: Wait for Pi-hole config to be initialized
+  ansible.builtin.wait_for:
+    path: "{{ pihole_data_dir }}/pihole.toml"
+    search_regex: '^\s*\[webserver\.api\]'
+    timeout: 120
+  tags: [pihole]
+
+- name: Ensure Pi-hole API max sessions is configured
+  ansible.builtin.lineinfile:
+    path: "{{ pihole_data_dir }}/pihole.toml"
+    regexp: '^\s*max_sessions\s*='
+    line: "    max_sessions = {{ pihole_api_max_sessions | int }}"
+    insertafter: '^\s*\[webserver\.api\]'
+    create: false
+  become: true
+  notify: Restart pihole container
   tags: [pihole]
 
 - name: Detect Pi-hole UID/GID from container
@@ -421,4 +451,42 @@
   delay: 2
   until: pihole_admin_check.status in [200, 302]
   when: pihole_healthcheck_enabled
+  tags: [pihole]
+
+- name: Verify Pi-hole sync convergence
+  ansible.builtin.set_fact:
+    pihole_sync_verified: false
+  when:
+    - pihole_sync_enabled
+    - pihole_sync_verify
+  tags: [pihole]
+
+- name: Verify Pi-hole sync convergence
+  ansible.builtin.include_tasks: verify-sync.yml
+  loop: "{{ range(0, (pihole_sync_verify_retries | int)) | list }}"
+  loop_control:
+    pause: "{{ pihole_sync_verify_delay | int }}"
+  when:
+    - pihole_sync_enabled
+    - pihole_sync_verify
+    - not pihole_sync_verified | default(false)
+  tags: [pihole]
+
+- name: Assert Pi-hole sync convergence
+  ansible.builtin.assert:
+    that:
+      - pihole_sync_verified | default(false)
+    fail_msg: >-
+      Pi-hole sync verification failed. Missing upstreams={{
+      pihole_sync_upstreams_missing | default([]) }}, extra upstreams={{
+      pihole_sync_upstreams_extra | default([]) }}, missing hosts={{
+      pihole_sync_hosts_missing | default([]) }}, extra hosts={{
+      pihole_sync_hosts_extra | default([]) }}, missing CNAMEs={{
+      pihole_sync_cname_missing | default([]) }}, extra CNAMEs={{
+      pihole_sync_cname_extra | default([]) }}, missing revServers={{
+      pihole_sync_rev_missing | default([]) }}, extra revServers={{
+      pihole_sync_rev_extra | default([]) }}.
+  when:
+    - pihole_sync_enabled
+    - pihole_sync_verify
   tags: [pihole]

@@ -1,0 +1,7 @@
+# 2025-12-30
+
+- Primary/secondary Pi-hole stacks are running; replica UI has synced DNS values but recent updates show 404s in sync logs for host entries.
+- Sync uses per-key Pi-hole v6 endpoints; scalar DNS keys like `domainNeeded` return 404 and are skipped.
+- Sync script now requires `SYNC_INTERVAL`, `LOCAL_PIHOLE_API`, `SYNC_BACKOFF_SECONDS`, and `PIHOLE_PASSWORD` with no defaults.
+- Playbook now enforces `PIHOLE_SYNC_BACKOFF_SECONDS`, `PIHOLE_SYNC_PASSWORD`, and `PIHOLE_API_MAX_SESSIONS`, and sets `webserver.api.max_sessions` in `pihole.toml`.
+- Sync verification parsing hardened (auth payload parsing no longer requires both responses). Host sync now tries single-segment encoding first and falls back to the legacy `/hosts/<ip>/<name>` path on 404.

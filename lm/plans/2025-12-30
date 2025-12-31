@@ -1,0 +1,5 @@
+# 2025-12-30
+
+- Re-run the Pi-hole playbook to deploy the updated sync script/handlers and confirm sync verification passes.
+- Validate `PIHOLE_SYNC_BACKOFF_SECONDS`, `PIHOLE_SYNC_PASSWORD`, and `PIHOLE_API_MAX_SESSIONS` are set in `.env`.
+- Confirm pihole-sync logs are clean (no 404 on host paths) and the replica UI reflects primary DNS entries.

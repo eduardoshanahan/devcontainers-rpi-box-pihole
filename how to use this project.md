@@ -111,8 +111,14 @@ and let replicas pull from it.
    - `PIHOLE_SYNC_ENABLED=true`
    - `PIHOLE_SYNC_PRIMARY_URL=https://pihole-primary.local`
    - `PIHOLE_SYNC_INTERVAL=300`
-   - `PIHOLE_SYNC_PASSWORD` if the API/UI password differs from `PIHOLE_WEB_PASSWORD`
+   - `PIHOLE_SYNC_BACKOFF_SECONDS=30`
+   - `PIHOLE_SYNC_LOCAL_API=http://127.0.0.1/api`
+   - `PIHOLE_SYNC_VERIFY=true`
+   - `PIHOLE_SYNC_VERIFY_DELAY=15`
+   - `PIHOLE_SYNC_PASSWORD` (required; should match the UI/API password)
+   - `PIHOLE_API_MAX_SESSIONS=64`
 3. Re-run the playbook for replicas to install the sync sidecar.
+4. The playbook will verify sync convergence by comparing DNS settings with the primary. Set `PIHOLE_SYNC_VERIFY=false` to skip the check.
 
 ## 5. LAN DNS Setup (UCG Max)
 

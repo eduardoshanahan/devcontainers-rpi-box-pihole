@@ -112,4 +112,4 @@ src/collections/ansible_collections/
 .ansible/
 
 # Working memory is a scratch pad for temporary notes
-working_memory.md
+working memory.md

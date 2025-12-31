@@ -22,3 +22,6 @@
 - Current blocker: sync still returns 404 on import; need to capture exact failing URL after deploying latest script with enhanced logging.
 - Found failing URL: `/api/config/dns/domainNeeded/true` returns 404; removed scalar DNS key sync, now only upstreams + hosts are updated.
 - Added log backoff/deduping, per-key disable on 404, and support for cnameRecords/revServers using per-key endpoints.
+- Added Ansible sync verification that compares primary/replica DNS settings and fails on mismatch.
+- Fixed sync verification parsing by splitting auth content capture into its own set_fact before extracting sid/csrf.
+- Removed sync script defaults (interval/local API) and made `PIHOLE_SYNC_LOCAL_API`, verify flags, and delays required via env/host vars.

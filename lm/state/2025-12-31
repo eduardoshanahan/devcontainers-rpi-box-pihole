@@ -1,0 +1,8 @@
+# 2025-12-31
+
+- `pihole-sync` on rpi-box-02 was logging 404s for `/api/config/dns/hosts/<ip>/<name>` when hostnames include dots; sync script updated to try the single-segment encoded path and fall back to the legacy two-segment path, but needs deployment.
+- Playbook assertions failed for `pihole_api_max_sessions` because host vars lacked the env lookup; `rpi_box_01.yml` and `rpi_box_02.yml` now include it.
+- `.env` had duplicate `PIHOLE_API_MAX_SESSIONS` entries; one was removed.
+- API seat limit (HTTP 429) has appeared during verification before; playbook enforces `webserver.api.max_sessions` in `pihole.toml`.
+- Added a wait for `pihole.toml` to initialize before setting `webserver.api.max_sessions` so the value reliably sticks.
+- Deployment now succeeds after setting `webserver.api.max_sessions = 64` on both nodes and restarting Pi-hole; sync verification passes.

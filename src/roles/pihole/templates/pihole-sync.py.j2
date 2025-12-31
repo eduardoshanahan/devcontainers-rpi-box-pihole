@@ -76,27 +76,52 @@ def list_sync(opener, base_url, headers, key, desired, current):
     removes = current_set - desired_set
 
     if key == "hosts":
-        def host_path(value):
-            parts = str(value).split()
-            if len(parts) < 2:
+        def host_paths(value):
+            raw = str(value).strip()
+            if not raw or raw.count(" ") < 1:
                 return None
-            ip = urllib.parse.quote(parts[0], safe='')
-            name = urllib.parse.quote(" ".join(parts[1:]), safe='')
-            return f"{base_url}/config/dns/hosts/{ip}/{name}"
+            encoded = urllib.parse.quote(raw, safe='')
+            parts = raw.split()
+            ip = parts[0]
+            name = " ".join(parts[1:])
+            legacy = (
+                f"{base_url}/config/dns/hosts/"
+                f"{urllib.parse.quote(ip, safe='')}/"
+                f"{urllib.parse.quote(name, safe='')}"
+            )
+            return [f"{base_url}/config/dns/hosts/{encoded}", legacy]
         for value in sorted(adds):
-            path = host_path(value)
-            if not path:
+            paths = host_paths(value)
+            if not paths:
                 return f"invalid host entry: {value}"
-            _, err = request_json(opener, path, method="PUT", headers=headers)
-            if err:
-                return err
+            last_err = None
+            for path in paths:
+                _, err = request_json(opener, path, method="PUT", headers=headers)
+                if err and "HTTP 404" in err:
+                    last_err = err
+                    continue
+                if err:
+                    return err
+                last_err = None
+                break
+            if last_err:
+                return last_err
         for value in sorted(removes):
-            path = host_path(value)
-            if not path:
+            paths = host_paths(value)
+            if not paths:
                 return f"invalid host entry: {value}"
-            _, err = request_json(opener, path, method="DELETE", headers=headers)
-            if err:
-                return err
+            last_err = None
+            for path in paths:
+                _, err = request_json(opener, path, method="DELETE", headers=headers)
+                if err and "HTTP 404" in err:
+                    last_err = err
+                    continue
+                if err:
+                    return err
+                last_err = None
+                break
+            if last_err:
+                return last_err
         return None
 
     if key == "cnameRecords":
@@ -193,19 +218,42 @@ def list_sync(opener, base_url, headers, key, desired, current):
 
 def main():
     primary = os.environ.get("PRIMARY_PIHOLE")
-    interval = int(os.environ.get("SYNC_INTERVAL", "300"))
     password = os.environ.get("PIHOLE_PASSWORD")
-    local_api = os.environ.get("LOCAL_PIHOLE_API", "http://127.0.0.1/api").rstrip("/")
+    interval_raw = os.environ.get("SYNC_INTERVAL")
+    local_api_raw = os.environ.get("LOCAL_PIHOLE_API")
+    backoff_raw = os.environ.get("SYNC_BACKOFF_SECONDS")
 
     if not primary:
         raise SystemExit("PRIMARY_PIHOLE is required on replicas")
     if not password:
         raise SystemExit("PIHOLE_PASSWORD is required")
+    if not interval_raw:
+        raise SystemExit("SYNC_INTERVAL is required")
+    if not local_api_raw:
+        raise SystemExit("LOCAL_PIHOLE_API is required")
+    if not backoff_raw:
+        raise SystemExit("SYNC_BACKOFF_SECONDS is required")
+
+    try:
+        interval = int(interval_raw)
+    except ValueError as exc:
+        raise SystemExit(f"SYNC_INTERVAL must be an integer: {interval_raw}") from exc
+    if interval <= 0:
+        raise SystemExit(f"SYNC_INTERVAL must be greater than 0: {interval_raw}")
+
+    try:
+        backoff_base = int(backoff_raw)
+    except ValueError as exc:
+        raise SystemExit(f"SYNC_BACKOFF_SECONDS must be an integer: {backoff_raw}") from exc
+    if backoff_base <= 0:
+        raise SystemExit(f"SYNC_BACKOFF_SECONDS must be greater than 0: {backoff_raw}")
+
+    local_api = local_api_raw.rstrip("/")
 
     primary_base = primary.rstrip("/") + "/api"
 
-    log(f"starting; primary={primary} interval={interval}s")
-    backoff = 30
+    log(f"starting; primary={primary} interval={interval}s backoff={backoff_base}s")
+    backoff = backoff_base
     last_error = None
     last_error_count = 0
     unsupported_keys = set()
@@ -225,7 +273,7 @@ def main():
 
     def reset_backoff():
         nonlocal backoff, last_error, last_error_count
-        backoff = 30
+        backoff = backoff_base
         last_error = None
         last_error_count = 0
 

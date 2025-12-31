@@ -1,0 +1,7 @@
+# 2025-12-30
+
+- Removed sync script defaults; `SYNC_INTERVAL`, `LOCAL_PIHOLE_API`, and `SYNC_BACKOFF_SECONDS` are now required.
+- Added `PIHOLE_SYNC_BACKOFF_SECONDS` and `PIHOLE_API_MAX_SESSIONS` to `.env`/`.env.example`, and set `PIHOLE_SYNC_PASSWORD` explicitly.
+- Updated host vars/docs to require the new sync and API max sessions values.
+- Added handlers to restart `pihole` and `pihole-sync` when templates or config change.
+- Hardened sync verification parsing and auth checks; host sync now tries single-segment encoding first and falls back to the legacy `/hosts/<ip>/<name>` path on 404.

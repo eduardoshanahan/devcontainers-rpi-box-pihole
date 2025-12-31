@@ -4,3 +4,24 @@
     name: systemd-resolved
     state: restarted
     enabled: true
+
+- name: Restart pihole container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - restart
+      - pihole
+  changed_when: true
+  failed_when: false
+  become: true
+
+- name: Restart pihole-sync container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - restart
+      - pihole-sync
+  changed_when: true
+  failed_when: false
+  become: true
+  when: pihole_sync_enabled | default(false)

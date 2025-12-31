@@ -1,0 +1,259 @@
+---
+- name: Authenticate to primary Pi-hole API for sync verification
+  ansible.builtin.uri:
+    url: "{{ pihole_sync_primary_url.rstrip('/') }}/api/auth"
+    method: POST
+    body_format: json
+    body:
+      password: "{{ pihole_sync_password }}"
+    validate_certs: false
+    status_code:
+      - 200
+      - 401
+      - 429
+    return_content: true
+  register: pihole_sync_primary_auth
+  no_log: true
+  failed_when: false
+
+- name: Authenticate to local Pi-hole API for sync verification
+  ansible.builtin.uri:
+    url: "http://127.0.0.1/api/auth"
+    method: POST
+    body_format: json
+    body:
+      password: "{{ pihole_sync_password }}"
+    status_code:
+      - 200
+      - 401
+      - 429
+    return_content: true
+  register: pihole_sync_local_auth
+  no_log: true
+  failed_when: false
+
+- name: Capture sync verification auth response content
+  ansible.builtin.set_fact:
+    pihole_sync_primary_auth_content: "{{ (pihole_sync_primary_auth.content | default('')) | string }}"
+    pihole_sync_local_auth_content: "{{ (pihole_sync_local_auth.content | default('')) | string }}"
+    pihole_sync_primary_auth_status: "{{ pihole_sync_primary_auth.status | default(0) | int }}"
+    pihole_sync_local_auth_status: "{{ pihole_sync_local_auth.status | default(0) | int }}"
+    pihole_sync_primary_auth_failed: "{{ pihole_sync_primary_auth.failed | default(false) }}"
+    pihole_sync_local_auth_failed: "{{ pihole_sync_local_auth.failed | default(false) }}"
+    pihole_sync_primary_auth_msg: "{{ pihole_sync_primary_auth.msg | default('') }}"
+    pihole_sync_local_auth_msg: "{{ pihole_sync_local_auth.msg | default('') }}"
+    pihole_sync_primary_auth_payload: {}
+    pihole_sync_local_auth_payload: {}
+
+- name: Parse sync verification auth JSON payloads
+  ansible.builtin.set_fact:
+    pihole_sync_primary_auth_payload: >-
+      {{ pihole_sync_primary_auth_content | from_json }}
+  when:
+    - pihole_sync_primary_auth_content | regex_search('^\\s*\\{')
+
+- name: Parse sync verification local auth JSON payload
+  ansible.builtin.set_fact:
+    pihole_sync_local_auth_payload: >-
+      {{ pihole_sync_local_auth_content | from_json }}
+  when:
+    - pihole_sync_local_auth_content | regex_search('^\\s*\\{')
+
+- name: Evaluate sync verification auth status
+  ansible.builtin.set_fact:
+    pihole_sync_primary_sid: >-
+      {{
+        (pihole_sync_primary_auth.json.session.sid
+          | default((pihole_sync_primary_auth_payload | default({})).session.sid | default('')))
+        | default(
+          (pihole_sync_primary_auth_content
+            | regex_findall('\"sid\":\"([^\"]+)\"')
+            | first
+            | default(''))
+        )
+        | default(pihole_sync_primary_auth.cookies.sid | default(''))
+      }}
+    pihole_sync_primary_csrf: >-
+      {{
+        (pihole_sync_primary_auth.json.session.csrf
+          | default((pihole_sync_primary_auth_payload | default({})).session.csrf | default('')))
+        | default(
+          (pihole_sync_primary_auth_content
+            | regex_findall('\"csrf\":\"([^\"]+)\"')
+            | first
+            | default(''))
+        )
+        | default(pihole_sync_primary_auth.cookies.csrf | default(''))
+      }}
+    pihole_sync_local_sid: >-
+      {{
+        (pihole_sync_local_auth.json.session.sid
+          | default((pihole_sync_local_auth_payload | default({})).session.sid | default('')))
+        | default(
+          (pihole_sync_local_auth_content
+            | regex_findall('\"sid\":\"([^\"]+)\"')
+            | first
+            | default(''))
+        )
+        | default(pihole_sync_local_auth.cookies.sid | default(''))
+      }}
+    pihole_sync_local_csrf: >-
+      {{
+        (pihole_sync_local_auth.json.session.csrf
+          | default((pihole_sync_local_auth_payload | default({})).session.csrf | default('')))
+        | default(
+          (pihole_sync_local_auth_content
+            | regex_findall('\"csrf\":\"([^\"]+)\"')
+            | first
+            | default(''))
+        )
+        | default(pihole_sync_local_auth.cookies.csrf | default(''))
+      }}
+- name: Capture sync verification auth details
+  ansible.builtin.set_fact:
+    pihole_sync_primary_sid_len: "{{ pihole_sync_primary_sid | length }}"
+    pihole_sync_primary_csrf_len: "{{ pihole_sync_primary_csrf | length }}"
+    pihole_sync_local_sid_len: "{{ pihole_sync_local_sid | length }}"
+    pihole_sync_local_csrf_len: "{{ pihole_sync_local_csrf | length }}"
+    pihole_sync_primary_payload_keys: >-
+      {{ (pihole_sync_primary_auth_payload | default({}) | dict2items | map(attribute='key') | list) }}
+    pihole_sync_local_payload_keys: >-
+      {{ (pihole_sync_local_auth_payload | default({}) | dict2items | map(attribute='key') | list) }}
+    pihole_sync_primary_session_keys: >-
+      {{ ((pihole_sync_primary_auth_payload | default({})).session | default({}) | dict2items | map(attribute='key') | list) }}
+    pihole_sync_local_session_keys: >-
+      {{ ((pihole_sync_local_auth_payload | default({})).session | default({}) | dict2items | map(attribute='key') | list) }}
+
+- name: Evaluate sync verification auth result
+  ansible.builtin.set_fact:
+    pihole_sync_primary_auth_ok: "{{ (pihole_sync_primary_auth_status | int == 200)
+      and (pihole_sync_primary_sid_len | int > 0)
+      and (pihole_sync_primary_csrf_len | int > 0) }}"
+    pihole_sync_local_auth_ok: "{{ (pihole_sync_local_auth_status | int == 200)
+      and (pihole_sync_local_sid_len | int > 0)
+      and (pihole_sync_local_csrf_len | int > 0) }}"
+
+- name: Report sync verification auth failure
+  ansible.builtin.debug:
+    msg: >-
+      Pi-hole sync verification auth failed. Primary error={{
+      pihole_sync_primary_auth.json.error.key | default('') }} {{
+      pihole_sync_primary_auth.json.error.hint | default('') }},
+      local error={{ pihole_sync_local_auth.json.error.key | default('') }} {{
+      pihole_sync_local_auth.json.error.hint | default('') }}. Primary status={{
+      pihole_sync_primary_auth_status }}, local status={{
+      pihole_sync_local_auth_status }}, primary failed={{
+      pihole_sync_primary_auth_failed }}, local failed={{
+      pihole_sync_local_auth_failed }}, primary msg={{
+      pihole_sync_primary_auth_msg }}, local msg={{
+      pihole_sync_local_auth_msg }}, primary content length={{
+      pihole_sync_primary_auth_content | length }}, local content length={{
+      pihole_sync_local_auth_content | length }}, primary sid/csrf lengths={{
+      pihole_sync_primary_sid_len }}/{{ pihole_sync_primary_csrf_len }},
+      local sid/csrf lengths={{ pihole_sync_local_sid_len }}/{{ pihole_sync_local_csrf_len }},
+      primary payload keys={{ pihole_sync_primary_payload_keys }},
+      local payload keys={{ pihole_sync_local_payload_keys }},
+      primary session keys={{ pihole_sync_primary_session_keys }},
+      local session keys={{ pihole_sync_local_session_keys }}.
+  when:
+    - not (pihole_sync_primary_auth_ok | bool) or not (pihole_sync_local_auth_ok | bool)
+
+- name: Fetch primary DNS config for sync verification
+  ansible.builtin.uri:
+    url: "{{ pihole_sync_primary_url.rstrip('/') }}/api/config/dns"
+    method: GET
+    headers:
+      X-CSRF-Token: "{{ pihole_sync_primary_csrf }}"
+      X-FTL-SID: "{{ pihole_sync_primary_sid }}"
+    validate_certs: false
+    return_content: true
+  register: pihole_sync_primary_dns
+  when: pihole_sync_primary_auth_ok
+
+- name: Fetch local DNS config for sync verification
+  ansible.builtin.uri:
+    url: "http://127.0.0.1/api/config/dns"
+    method: GET
+    headers:
+      X-CSRF-Token: "{{ pihole_sync_local_csrf }}"
+      X-FTL-SID: "{{ pihole_sync_local_sid }}"
+    return_content: true
+  register: pihole_sync_local_dns
+  when: pihole_sync_local_auth_ok
+
+- name: Capture DNS config for sync verification
+  ansible.builtin.set_fact:
+    pihole_sync_primary_dns_config: "{{ pihole_sync_primary_dns.json.config.dns | default({}) }}"
+    pihole_sync_local_dns_config: "{{ pihole_sync_local_dns.json.config.dns | default({}) }}"
+  when:
+    - pihole_sync_primary_auth_ok
+    - pihole_sync_local_auth_ok
+
+- name: Compare DNS config for sync verification
+  ansible.builtin.set_fact:
+    pihole_sync_upstreams_missing: >-
+      {{
+        (pihole_sync_primary_dns_config.upstreams | default([]))
+        | difference(pihole_sync_local_dns_config.upstreams | default([]))
+      }}
+    pihole_sync_upstreams_extra: >-
+      {{
+        (pihole_sync_local_dns_config.upstreams | default([]))
+        | difference(pihole_sync_primary_dns_config.upstreams | default([]))
+      }}
+    pihole_sync_hosts_missing: >-
+      {{
+        (pihole_sync_primary_dns_config.hosts | default([]))
+        | difference(pihole_sync_local_dns_config.hosts | default([]))
+      }}
+    pihole_sync_hosts_extra: >-
+      {{
+        (pihole_sync_local_dns_config.hosts | default([]))
+        | difference(pihole_sync_primary_dns_config.hosts | default([]))
+      }}
+    pihole_sync_cname_missing: >-
+      {{
+        (pihole_sync_primary_dns_config.cnameRecords | default([]))
+        | difference(pihole_sync_local_dns_config.cnameRecords | default([]))
+      }}
+    pihole_sync_cname_extra: >-
+      {{
+        (pihole_sync_local_dns_config.cnameRecords | default([]))
+        | difference(pihole_sync_primary_dns_config.cnameRecords | default([]))
+      }}
+    pihole_sync_rev_missing: >-
+      {{
+        (pihole_sync_primary_dns_config.revServers | default([]))
+        | difference(pihole_sync_local_dns_config.revServers | default([]))
+      }}
+    pihole_sync_rev_extra: >-
+      {{
+        (pihole_sync_local_dns_config.revServers | default([]))
+        | difference(pihole_sync_primary_dns_config.revServers | default([]))
+      }}
+  when:
+    - pihole_sync_primary_auth_ok
+    - pihole_sync_local_auth_ok
+
+- name: Determine sync verification result
+  ansible.builtin.set_fact:
+    pihole_sync_verified: >-
+      {{
+        (pihole_sync_upstreams_missing | length == 0)
+        and (pihole_sync_upstreams_extra | length == 0)
+        and (pihole_sync_hosts_missing | length == 0)
+        and (pihole_sync_hosts_extra | length == 0)
+        and (pihole_sync_cname_missing | length == 0)
+        and (pihole_sync_cname_extra | length == 0)
+        and (pihole_sync_rev_missing | length == 0)
+        and (pihole_sync_rev_extra | length == 0)
+      }}
+  when:
+    - pihole_sync_primary_auth_ok
+    - pihole_sync_local_auth_ok
+
+- name: Mark sync verification as failed when auth fails
+  ansible.builtin.set_fact:
+    pihole_sync_verified: false
+  when:
+    - not (pihole_sync_primary_auth_ok | bool) or not (pihole_sync_local_auth_ok | bool)
