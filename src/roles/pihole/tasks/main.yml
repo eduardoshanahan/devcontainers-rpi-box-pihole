@@ -48,6 +48,8 @@
       - pihole_api_max_sessions | int > 0
       - pihole_sync_enabled is defined
       - pihole_sync_enabled is boolean
+      - pihole_traefik_enabled is defined
+      - pihole_traefik_enabled is boolean
     fail_msg: "Define required pihole_* variables before applying this role."
   tags: [pihole]
 
@@ -82,6 +84,25 @@
       PIHOLE_SYNC_PASSWORD, PIHOLE_SYNC_LOCAL_API, PIHOLE_SYNC_VERIFY, and
       PIHOLE_SYNC_VERIFY_DELAY for replica nodes.
   when: pihole_sync_enabled
+  tags: [pihole]
+
+- name: Ensure Traefik variables are provided
+  ansible.builtin.assert:
+    that:
+      - pihole_traefik_host is defined
+      - pihole_traefik_host | length > 0
+      - pihole_traefik_network is defined
+      - pihole_traefik_network | length > 0
+      - pihole_traefik_entrypoints is defined
+      - pihole_traefik_entrypoints | length > 0
+      - pihole_traefik_router is defined
+      - pihole_traefik_router | length > 0
+      - pihole_network_mode != "host"
+    fail_msg: >-
+      Set PIHOLE_TRAEFIK_HOST, PIHOLE_TRAEFIK_NETWORK,
+      PIHOLE_TRAEFIK_ENTRYPOINTS, and PIHOLE_TRAEFIK_ROUTER, and use
+      PIHOLE_NETWORK_MODE=bridge when enabling Traefik.
+  when: pihole_traefik_enabled
   tags: [pihole]
 
 - name: Set initial Pi-hole UID/GID defaults
@@ -450,7 +471,20 @@
   retries: 5
   delay: 2
   until: pihole_admin_check.status in [200, 302]
-  when: pihole_healthcheck_enabled
+  when: pihole_healthcheck_enabled and not pihole_traefik_enabled
+  tags: [pihole]
+
+- name: Note when sync verification is skipped with Traefik
+  ansible.builtin.debug:
+    msg: >-
+      Skipping Pi-hole sync verification because Traefik is enabled and the
+      local API is not reachable from the host without a bound web port.
+      Set PIHOLE_SYNC_VERIFY=false or expose a local API port if you need
+      verification.
+  when:
+    - pihole_sync_enabled
+    - pihole_sync_verify
+    - pihole_traefik_enabled
   tags: [pihole]
 
 - name: Verify Pi-hole sync convergence
@@ -459,6 +493,7 @@
   when:
     - pihole_sync_enabled
     - pihole_sync_verify
+    - not pihole_traefik_enabled
   tags: [pihole]
 
 - name: Verify Pi-hole sync convergence
@@ -469,6 +504,7 @@
   when:
     - pihole_sync_enabled
     - pihole_sync_verify
+    - not pihole_traefik_enabled
     - not pihole_sync_verified | default(false)
   tags: [pihole]
 
@@ -489,4 +525,5 @@
   when:
     - pihole_sync_enabled
     - pihole_sync_verify
+    - not pihole_traefik_enabled
   tags: [pihole]

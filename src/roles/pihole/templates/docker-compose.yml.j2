@@ -4,12 +4,19 @@ services:
     container_name: pihole
     hostname: pihole
     restart: unless-stopped
+{% if pihole_traefik_enabled %}
+    networks:
+      - {{ pihole_traefik_network }}
+{% else %}
     network_mode: {{ pihole_network_mode | to_json }}
+{% endif %}
 {% if pihole_network_mode != "host" %}
     ports:
       - "53:53/tcp"
       - "53:53/udp"
+{% if not pihole_traefik_enabled %}
       - "{{ pihole_web_port }}:80/tcp"
+{% endif %}
 {% if pihole_enable_dhcp %}
       - "67:67/udp"
 {% endif %}
@@ -26,6 +33,15 @@ services:
     volumes:
       - "{{ pihole_data_dir }}:/etc/pihole"
       - "{{ pihole_dnsmasq_dir }}:/etc/dnsmasq.d"
+{% if pihole_traefik_enabled %}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network={{ pihole_traefik_network }}"
+      - "traefik.http.routers.{{ pihole_traefik_router }}.rule=Host(`{{ pihole_traefik_host }}`)"
+      - "traefik.http.routers.{{ pihole_traefik_router }}.entrypoints={{ pihole_traefik_entrypoints }}"
+      - "traefik.http.routers.{{ pihole_traefik_router }}.tls={{ pihole_traefik_tls | to_json }}"
+      - "traefik.http.services.{{ pihole_traefik_router }}.loadbalancer.server.port=80"
+{% endif %}
     cap_add:
       - NET_ADMIN
 {% if pihole_network_mode != "host" %}
@@ -42,7 +58,10 @@ services:
     restart: unless-stopped
     depends_on:
       - pihole
-{% if pihole_network_mode == "host" %}
+{% if pihole_traefik_enabled %}
+    networks:
+      - {{ pihole_traefik_network }}
+{% elif pihole_network_mode == "host" %}
     network_mode: "host"
 {% endif %}
     environment:
@@ -50,8 +69,18 @@ services:
       SYNC_INTERVAL: "{{ pihole_sync_interval }}"
       SYNC_BACKOFF_SECONDS: "{{ pihole_sync_backoff_seconds }}"
       PIHOLE_PASSWORD: "{{ pihole_sync_password }}"
+{% if pihole_traefik_enabled %}
+      LOCAL_PIHOLE_API: "http://pihole/api"
+{% else %}
       LOCAL_PIHOLE_API: "{{ pihole_sync_local_api }}"
+{% endif %}
     volumes:
       - "{{ pihole_compose_dir }}/sync:/sync:ro"
     entrypoint: ["python3", "/sync/sync.py"]
+{% endif %}
+
+{% if pihole_traefik_enabled %}
+networks:
+  {{ pihole_traefik_network }}:
+    external: true
 {% endif %}

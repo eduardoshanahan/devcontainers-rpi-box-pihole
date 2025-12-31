@@ -120,6 +120,27 @@ and let replicas pull from it.
 3. Re-run the playbook for replicas to install the sync sidecar.
 4. The playbook will verify sync convergence by comparing DNS settings with the primary. Set `PIHOLE_SYNC_VERIFY=false` to skip the check.
 
+## 4.3 Pi-hole + Traefik (Optional)
+
+If Traefik is running on the host and bound to ports 80/443, you can expose the
+Pi-hole UI through Traefik without binding 80/443 on the Pi-hole container.
+
+1. Set these in `.env`:
+   - `PIHOLE_TRAEFIK_ENABLED=true`
+   - `PIHOLE_TRAEFIK_HOST=pihole.example.local`
+   - `PIHOLE_TRAEFIK_NETWORK=web`
+   - `PIHOLE_TRAEFIK_ENTRYPOINTS=websecure`
+   - `PIHOLE_TRAEFIK_TLS=true`
+   - `PIHOLE_TRAEFIK_ROUTER=pihole`
+2. Use `PIHOLE_NETWORK_MODE=bridge` and disable the admin health check
+   (`PIHOLE_HEALTHCHECK_ENABLED=false`) since no web port is bound on the host.
+   If each box needs a different hostname, override `pihole_traefik_enabled`
+   and `pihole_traefik_host` in `src/inventory/host_vars/<host>.yml`.
+3. Ensure the Pi-hole container joins the same external Docker network as
+   Traefik (default `web`) and that DNS points `PIHOLE_TRAEFIK_HOST` to the
+   Pi-hole host.
+4. Re-run the playbook to redeploy the stack.
+
 ## 5. LAN DNS Setup (UCG Max)
 
 If the UCG Max manages DHCP, set the LAN DNS server to the Pi-hole IP so

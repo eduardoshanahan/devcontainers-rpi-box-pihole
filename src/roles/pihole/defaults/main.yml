@@ -42,3 +42,9 @@ pihole_sync_password: ""
 pihole_sync_local_api: ""
 pihole_sync_verify:
 pihole_sync_verify_delay:
+pihole_traefik_enabled: false
+pihole_traefik_network: "web"
+pihole_traefik_host: ""
+pihole_traefik_entrypoints: "websecure"
+pihole_traefik_tls: true
+pihole_traefik_router: "pihole"

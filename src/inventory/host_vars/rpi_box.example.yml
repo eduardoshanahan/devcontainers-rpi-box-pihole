@@ -28,6 +28,16 @@ pihole_local_ipv4: "{{ ansible_host }}"
 pihole_enable_dhcp: "{{ lookup('env', 'PIHOLE_ENABLE_DHCP') | bool }}"
 pihole_healthcheck_enabled: >-
   {{ lookup('env', 'PIHOLE_HEALTHCHECK_ENABLED') | bool }}
+pihole_traefik_enabled: "{{ lookup('env', 'PIHOLE_TRAEFIK_ENABLED') | bool }}"
+pihole_traefik_network: "{{ lookup('env', 'PIHOLE_TRAEFIK_NETWORK') }}"
+pihole_traefik_host: "{{ lookup('env', 'PIHOLE_TRAEFIK_HOST') }}"
+pihole_traefik_entrypoints: "{{ lookup('env', 'PIHOLE_TRAEFIK_ENTRYPOINTS') }}"
+pihole_traefik_tls: "{{ lookup('env', 'PIHOLE_TRAEFIK_TLS') | bool }}"
+pihole_traefik_router: "{{ lookup('env', 'PIHOLE_TRAEFIK_ROUTER') }}"
+
+# Per-host overrides (example)
+# pihole_traefik_enabled: true
+# pihole_traefik_host: "pihole.rpi-box-01.example.local"
 
 # Daily report configuration
 pihole_report_email: "{{ lookup('env', 'DAILY_REPORT_EMAIL') }}"
