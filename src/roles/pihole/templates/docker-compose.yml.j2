@@ -1,3 +1,14 @@
+{%- set pihole_listening_mode = pihole_dnsmasq_listening | default('') | string -%}
+{%- if pihole_listening_mode | length == 0 -%}
+{%- if pihole_traefik_enabled and pihole_network_mode != "host" -%}
+{%- set pihole_listening_mode = "ALL" -%}
+{%- else -%}
+{%- set pihole_listening_mode = "LOCAL" -%}
+{%- endif -%}
+{%- else -%}
+{%- set pihole_listening_mode = pihole_listening_mode | upper -%}
+{%- endif -%}
+
 services:
   pihole:
     image: "{{ pihole_image }}"
@@ -26,7 +37,7 @@ services:
       WEBPASSWORD: "{{ pihole_web_password }}"
       DNS1: "{{ pihole_dns1 }}"
       DNS2: "{{ pihole_dns2 }}"
-      FTLCONF_DNSMASQ_LISTENING: {{ pihole_dnsmasq_listening | to_json }}
+      FTLCONF_dns_listeningMode: "{{ pihole_listening_mode }}"
 {% if pihole_local_ipv4 | length > 0 %}
       FTLCONF_LOCAL_IPV4: "{{ pihole_local_ipv4 }}"
 {% endif %}

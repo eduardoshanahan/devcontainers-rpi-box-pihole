@@ -37,7 +37,6 @@
       - pihole_enable_dhcp is defined
       - pihole_enable_dhcp is boolean
       - pihole_dnsmasq_listening is defined
-      - pihole_dnsmasq_listening | length > 0
       - pihole_healthcheck_enabled is defined
       - pihole_healthcheck_enabled is boolean
       - pihole_container_name is defined
@@ -233,6 +232,29 @@
     timeout: 120
   tags: [pihole]
 
+- name: Read Pi-hole listening mode
+  ansible.builtin.shell: >-
+    docker exec pihole pihole-FTL --config
+    | awk -F= '/dns.listeningMode/ {gsub(/[ \t]/, "", $2); print $2; exit}'
+  register: pihole_listening_mode_check
+  changed_when: false
+  when:
+    - pihole_traefik_enabled
+    - pihole_network_mode != "host"
+  tags: [pihole]
+
+- name: Ensure Pi-hole listens for LAN queries when Traefik is enabled
+  ansible.builtin.assert:
+    that:
+      - pihole_listening_mode_check.stdout == "ALL"
+    fail_msg: >-
+      Pi-hole listeningMode is {{ pihole_listening_mode_check.stdout | default('unknown') }},
+      expected ALL when Traefik is enabled with bridge networking.
+  when:
+    - pihole_traefik_enabled
+    - pihole_network_mode != "host"
+  tags: [pihole]
+
 - name: Ensure Pi-hole API max sessions is configured
   ansible.builtin.lineinfile:
     path: "{{ pihole_data_dir }}/pihole.toml"
@@ -242,6 +264,39 @@
     create: false
   become: true
   notify: Restart pihole container
+  tags: [pihole]
+
+- name: Ensure dig is installed on Debian-based hosts
+  ansible.builtin.package:
+    name: dnsutils
+    state: present
+  when: ansible_facts.os_family == "Debian"
+  become: true
+  tags: [pihole]
+
+- name: Check for dig availability
+  ansible.builtin.command: dig -v
+  register: pihole_dig_check
+  changed_when: false
+  failed_when: false
+  tags: [pihole]
+
+- name: Run Pi-hole DNS smoke tests
+  ansible.builtin.command: "dig +short @{{ ansible_host }} {{ item }}"
+  register: pihole_dns_smoke_tests
+  changed_when: false
+  when:
+    - pihole_dig_check.rc == 0
+  loop:
+    - "{{ pihole_traefik_host }}"
+    - "google.com"
+  tags: [pihole]
+
+- name: Warn when dig is missing
+  ansible.builtin.debug:
+    msg: "dig not found on host; skipping DNS smoke tests. Install dnsutils to enable."
+  when:
+    - pihole_dig_check.rc != 0
   tags: [pihole]
 
 - name: Detect Pi-hole UID/GID from container
