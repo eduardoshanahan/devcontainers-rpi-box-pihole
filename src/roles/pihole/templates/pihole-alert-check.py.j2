@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+import smtplib
+import socket
+import ssl
+import time
+import urllib.error
+import urllib.request
+from email.message import EmailMessage
+
+
+def load_env(path):
+    data = {}
+    with open(path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, _, value = line.partition("=")
+            data[key] = value.strip().strip('"')
+    return data
+
+
+def log(msg, log_path):
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    with open(log_path, "a", encoding="utf-8") as handle:
+        handle.write(f"{timestamp} {msg}\n")
+
+
+def require(env, key):
+    value = env.get(key, "").strip()
+    if not value:
+        raise KeyError(key)
+    return value
+
+
+def check_tcp(host, port, timeout):
+    with socket.create_connection((host, port), timeout=timeout):
+        return True
+
+
+def check_http(url, timeout, verify_tls):
+    context = None
+    if url.startswith("https://") and not verify_tls:
+        context = ssl._create_unverified_context()
+    with urllib.request.urlopen(url, timeout=timeout, context=context) as resp:
+        return resp.status in (200, 302)
+
+
+def send_email(env, subject, body):
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = env["ALERT_EMAIL_FROM"]
+    msg["To"] = env["ALERT_EMAIL_TO"]
+    msg.set_content(body)
+
+    host = env["ALERT_SMTP_HOST"]
+    port = int(env["ALERT_SMTP_PORT"])
+    user = env["ALERT_SMTP_USER"]
+    password = env["ALERT_SMTP_PASSWORD"]
+
+    if port == 465:
+        context = ssl.create_default_context()
+        with smtplib.SMTP_SSL(host, port, context=context) as server:
+            server.login(user, password)
+            server.send_message(msg)
+    else:
+        with smtplib.SMTP(host, port) as server:
+            server.starttls(context=ssl.create_default_context())
+            server.login(user, password)
+            server.send_message(msg)
+
+
+def main():
+    env = load_env("{{ pihole_alert_env_path }}")
+    log_path = env.get("ALERT_LOG", "{{ pihole_alert_log }}")
+
+    try:
+        peer = require(env, "ALERT_PEER_HOST")
+        web_url = require(env, "ALERT_WEB_URL")
+        verify_tls_raw = require(env, "ALERT_VERIFY_TLS").lower()
+        if verify_tls_raw not in ("true", "false"):
+            raise ValueError("ALERT_VERIFY_TLS must be true or false")
+        verify_tls = verify_tls_raw == "true"
+        if not (web_url.startswith("http://") or web_url.startswith("https://")):
+            raise ValueError("ALERT_WEB_URL must start with http:// or https://")
+        if "/admin/" not in web_url:
+            raise ValueError("ALERT_WEB_URL must include /admin/")
+        timeout = int(env.get("ALERT_TIMEOUT_SECONDS", "{{ pihole_alert_timeout_seconds }}"))
+    except (KeyError, ValueError) as exc:
+        log(f"CONFIG ERROR: {exc}", log_path)
+        return
+
+    failures = []
+
+    try:
+        check_tcp(peer, 53, timeout)
+    except OSError as exc:
+        failures.append(f"TCP 53 failed: {exc}")
+
+    try:
+        if not check_http(web_url, timeout, verify_tls):
+            failures.append("HTTP admin check failed: status != 200/302")
+    except urllib.error.HTTPError as exc:
+        failures.append(f"HTTP admin check failed: HTTP {exc.code} {exc.reason}")
+    except OSError as exc:
+        failures.append(f"HTTP admin check failed: {exc}")
+
+    if failures:
+        body = "\n".join(
+            [
+                f"Pi-hole peer check failed for {peer}",
+                "",
+                *failures,
+            ]
+        )
+        log(f"ALERT: {failures}", log_path)
+        send_email(env, f"Pi-hole alert: {peer} unreachable", body)
+    else:
+        log(f"OK: {peer} reachable", log_path)
+
+
+if __name__ == "__main__":
+    main()

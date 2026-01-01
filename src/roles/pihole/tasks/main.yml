@@ -184,6 +184,54 @@
   when: pihole_traefik_enabled
   tags: [pihole]
 
+- name: Ensure Pi-hole alert variables are provided
+  ansible.builtin.assert:
+    that:
+      - pihole_alert_enabled is defined
+      - pihole_alert_enabled is boolean
+      - pihole_alert_email_to is defined
+      - pihole_alert_email_to | length > 0
+      - pihole_alert_email_from is defined
+      - pihole_alert_email_from | length > 0
+      - pihole_alert_smtp_host is defined
+      - pihole_alert_smtp_host | length > 0
+      - pihole_alert_smtp_port is defined
+      - pihole_alert_smtp_port | int > 0
+      - pihole_alert_smtp_user is defined
+      - pihole_alert_smtp_user | length > 0
+      - pihole_alert_smtp_password is defined
+      - pihole_alert_smtp_password | length > 0
+      - pihole_alert_peer_host is defined
+      - pihole_alert_peer_host | length > 0
+      - pihole_alert_web_url is defined
+      - pihole_alert_web_url | length > 0
+      - pihole_alert_web_url is match('^https?://')
+      - pihole_alert_web_url is search('/admin/')
+      - pihole_alert_web_url_hostname is defined
+      - pihole_alert_web_url_hostname | length > 0
+      - pihole_alert_web_url_ip is defined
+      - pihole_alert_web_url_ip | length > 0
+      - pihole_alert_verify_tls is defined
+      - pihole_alert_verify_tls is boolean
+      - pihole_alert_log is defined
+      - pihole_alert_log | length > 0
+      - pihole_alert_timeout_seconds is defined
+      - pihole_alert_timeout_seconds | int > 0
+      - pihole_alert_cron_minute is defined
+      - pihole_alert_cron_minute | length > 0
+      - pihole_alert_cron_hour is defined
+      - pihole_alert_cron_hour | length > 0
+      - pihole_alert_cron_user is defined
+      - pihole_alert_cron_user | length > 0
+      - pihole_alert_env_path is defined
+      - pihole_alert_env_path | length > 0
+      - pihole_alert_script_path is defined
+      - pihole_alert_script_path | length > 0
+    fail_msg: >-
+      Define PIHOLE_ALERT_* variables before enabling alert checks.
+  when: pihole_alert_enabled
+  tags: [pihole]
+
 - name: Set initial Pi-hole UID/GID defaults
   ansible.builtin.set_fact:
     pihole_effective_uid: "{{ pihole_uid | int }}"
@@ -213,6 +261,19 @@
     owner: root
     group: root
     mode: "0755"
+  tags: [pihole]
+
+- name: Ensure alert check hostname resolves via /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    line: "{{ pihole_alert_web_url_ip }} {{ pihole_alert_web_url_hostname }}"
+    regexp: "^[[:space:]]*{{ pihole_alert_web_url_ip | regex_escape() }}[[:space:]]+{{ pihole_alert_web_url_hostname | regex_escape() }}([[:space:]]+|$)"
+    state: present
+  when: pihole_alert_enabled
   tags: [pihole]
 
 - name: Ensure Pi-hole sync directory exists
@@ -576,6 +637,54 @@
     job: >-
       . /etc/pihole-report.env && /usr/local/bin/pihole-report.py
   when: pihole_report_enabled
+  tags: [pihole]
+
+- name: Install Pi-hole alert env file
+  ansible.builtin.template:
+    src: pihole-alert.env.j2
+    dest: "{{ pihole_alert_env_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: pihole_alert_enabled
+  tags: [pihole]
+
+- name: Install Pi-hole alert check script
+  ansible.builtin.template:
+    src: pihole-alert-check.py.j2
+    dest: "{{ pihole_alert_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: pihole_alert_enabled
+  tags: [pihole]
+
+- name: Remove legacy Pi-hole alert cron entries
+  ansible.builtin.cron:
+    name: "{{ item }}"
+    state: absent
+  loop:
+    - "pihole-alert-check.py"
+    - "pihole alert check (legacy)"
+  when: pihole_alert_enabled
+  tags: [pihole]
+
+- name: Remove legacy Pi-hole alert cron lines
+  ansible.builtin.cron:
+    name: "legacy pihole alert cleanup"
+    state: absent
+    job: "{{ pihole_alert_script_path }}"
+  when: pihole_alert_enabled
+  tags: [pihole]
+
+- name: Schedule Pi-hole alert checks
+  ansible.builtin.cron:
+    name: "pihole alert check"
+    user: "{{ pihole_alert_cron_user }}"
+    minute: "{{ pihole_alert_cron_minute }}"
+    hour: "{{ pihole_alert_cron_hour }}"
+    job: "{{ pihole_alert_script_path }}"
+  when: pihole_alert_enabled
   tags: [pihole]
 
 - name: Install Pi-hole systemd unit

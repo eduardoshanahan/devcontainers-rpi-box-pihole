@@ -52,3 +52,22 @@ pihole_traefik_host: ""
 pihole_traefik_entrypoints: "websecure"
 pihole_traefik_tls: true
 pihole_traefik_router: "pihole"
+pihole_alert_enabled:
+pihole_alert_email_to: ""
+pihole_alert_email_from: ""
+pihole_alert_smtp_host: ""
+pihole_alert_smtp_port:
+pihole_alert_smtp_user: ""
+pihole_alert_smtp_password: ""
+pihole_alert_peer_host: ""
+pihole_alert_web_url: ""
+pihole_alert_web_url_hostname: ""
+pihole_alert_web_url_ip: ""
+pihole_alert_verify_tls:
+pihole_alert_log: ""
+pihole_alert_timeout_seconds:
+pihole_alert_cron_minute: ""
+pihole_alert_cron_hour: ""
+pihole_alert_cron_user: ""
+pihole_alert_env_path: ""
+pihole_alert_script_path: ""
