@@ -55,6 +55,7 @@ pihole_systemd_autostart: >-
   {{ lookup('env', 'PIHOLE_SYSTEMD_AUTOSTART') | bool }}
 pihole_sync_enabled: "{{ lookup('env', 'PIHOLE_SYNC_ENABLED') | bool }}"
 pihole_sync_primary_url: "{{ lookup('env', 'PIHOLE_SYNC_PRIMARY_URL') }}"
+pihole_sync_primary_ip: "{{ lookup('env', 'PIHOLE_SYNC_PRIMARY_IP') }}"
 pihole_sync_interval: "{{ lookup('env', 'PIHOLE_SYNC_INTERVAL') | int }}"
 pihole_sync_backoff_seconds: "{{ lookup('env', 'PIHOLE_SYNC_BACKOFF_SECONDS') | int }}"
 pihole_sync_image: "{{ lookup('env', 'PIHOLE_SYNC_IMAGE') }}"

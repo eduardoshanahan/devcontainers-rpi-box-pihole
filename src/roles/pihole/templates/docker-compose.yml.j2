@@ -76,7 +76,7 @@ services:
     network_mode: "host"
 {% endif %}
     environment:
-      PRIMARY_PIHOLE: "{{ pihole_sync_primary_url }}"
+      PRIMARY_PIHOLE: "{{ pihole_sync_primary_address }}"
       SYNC_INTERVAL: "{{ pihole_sync_interval }}"
       SYNC_BACKOFF_SECONDS: "{{ pihole_sync_backoff_seconds }}"
       PIHOLE_PASSWORD: "{{ pihole_sync_password }}"

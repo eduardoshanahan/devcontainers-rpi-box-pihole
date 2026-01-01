@@ -57,12 +57,22 @@
     pihole_sync_enabled: "{{ pihole_sync_enabled | bool }}"
   tags: [pihole]
 
+- name: Remove orphan Pi-hole sync container when sync is disabled
+  community.docker.docker_container:
+    name: pihole-sync
+    state: absent
+  when: not pihole_sync_enabled
+  tags: [pihole]
+
 - name: Ensure Pi-hole sync variables are provided
   ansible.builtin.assert:
     that:
       - pihole_sync_primary_url is defined
       - pihole_sync_primary_url | length > 0
       - pihole_sync_primary_url is match('^https?://')
+      - pihole_sync_primary_ip is defined
+      - pihole_sync_primary_ip | length > 0
+      - pihole_sync_primary_ip is match('^https?://')
       - pihole_sync_interval is defined
       - pihole_sync_interval | int > 0
       - pihole_sync_image is defined
@@ -73,6 +83,7 @@
       - pihole_sync_password | length > 0
       - pihole_sync_local_api is defined
       - pihole_sync_local_api | length > 0
+      - pihole_sync_local_api is match('^https?://.+/api/?$')
       - pihole_sync_verify is defined
       - pihole_sync_verify is boolean
       - pihole_sync_verify_delay is defined
@@ -82,6 +93,75 @@
       PIHOLE_SYNC_IMAGE, PIHOLE_SYNC_BACKOFF_SECONDS,
       PIHOLE_SYNC_PASSWORD, PIHOLE_SYNC_LOCAL_API, PIHOLE_SYNC_VERIFY, and
       PIHOLE_SYNC_VERIFY_DELAY for replica nodes.
+  when: pihole_sync_enabled
+  tags: [pihole]
+
+- name: Ensure replica local API host mapping is provided when Traefik is enabled
+  ansible.builtin.assert:
+    that:
+      - pihole_sync_local_api_hostname is defined
+      - pihole_sync_local_api_hostname | length > 0
+      - pihole_sync_local_api_ip is defined
+      - pihole_sync_local_api_ip | length > 0
+    fail_msg: >-
+      Define PIHOLE_SYNC_LOCAL_API_HOSTNAME and PIHOLE_SYNC_LOCAL_API_IP for
+      replicas when Traefik is enabled to manage /etc/hosts.
+  when:
+    - pihole_sync_enabled
+    - pihole_sync_verify
+    - pihole_traefik_enabled
+  tags: [pihole]
+
+- name: Ensure replica local API hostname resolves via /etc/hosts
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+    line: "{{ pihole_sync_local_api_ip }} {{ pihole_sync_local_api_hostname }}"
+    regexp: "^[[:space:]]*{{ pihole_sync_local_api_ip | regex_escape() }}[[:space:]]+{{ pihole_sync_local_api_hostname | regex_escape() }}([[:space:]]+|$)"
+    state: present
+  when:
+    - pihole_sync_enabled
+    - pihole_sync_verify
+    - pihole_traefik_enabled
+  tags: [pihole]
+
+- name: Ensure Pi-hole sync primary hostname is provided when Traefik is enabled
+  ansible.builtin.assert:
+    that:
+      - pihole_sync_primary_hostname is defined
+      - pihole_sync_primary_hostname | length > 0
+    fail_msg: >-
+      Define PIHOLE_SYNC_PRIMARY_HOSTNAME when Traefik is enabled so the
+      replica can resolve the primary via DNS.
+  when:
+    - pihole_sync_enabled
+    - pihole_traefik_enabled
+  tags: [pihole]
+
+- name: Ensure Pi-hole sync primary hostname resolves
+  ansible.builtin.getent:
+    database: hosts
+    key: "{{ pihole_sync_primary_hostname }}"
+  changed_when: false
+  failed_when: >-
+    (pihole_sync_primary_hostname | length == 0)
+    or ((ansible_facts.getent_hosts | default({})).get(pihole_sync_primary_hostname) is not defined)
+  when:
+    - pihole_sync_enabled
+    - pihole_traefik_enabled
+  tags: [pihole]
+
+- name: Select Pi-hole sync primary address
+  ansible.builtin.set_fact:
+    pihole_sync_primary_address: >-
+      {{
+        (pihole_sync_primary_url
+         if (pihole_traefik_enabled | bool)
+         else pihole_sync_primary_ip)
+      }}
   when: pihole_sync_enabled
   tags: [pihole]
 
@@ -529,26 +609,12 @@
   when: pihole_healthcheck_enabled and not pihole_traefik_enabled
   tags: [pihole]
 
-- name: Note when sync verification is skipped with Traefik
-  ansible.builtin.debug:
-    msg: >-
-      Skipping Pi-hole sync verification because Traefik is enabled and the
-      local API is not reachable from the host without a bound web port.
-      Set PIHOLE_SYNC_VERIFY=false or expose a local API port if you need
-      verification.
-  when:
-    - pihole_sync_enabled
-    - pihole_sync_verify
-    - pihole_traefik_enabled
-  tags: [pihole]
-
 - name: Verify Pi-hole sync convergence
   ansible.builtin.set_fact:
     pihole_sync_verified: false
   when:
     - pihole_sync_enabled
     - pihole_sync_verify
-    - not pihole_traefik_enabled
   tags: [pihole]
 
 - name: Verify Pi-hole sync convergence
@@ -559,7 +625,6 @@
   when:
     - pihole_sync_enabled
     - pihole_sync_verify
-    - not pihole_traefik_enabled
     - not pihole_sync_verified | default(false)
   tags: [pihole]
 
@@ -580,5 +645,4 @@
   when:
     - pihole_sync_enabled
     - pihole_sync_verify
-    - not pihole_traefik_enabled
   tags: [pihole]

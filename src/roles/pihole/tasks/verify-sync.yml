@@ -1,7 +1,7 @@
 ---
 - name: Authenticate to primary Pi-hole API for sync verification
   ansible.builtin.uri:
-    url: "{{ pihole_sync_primary_url.rstrip('/') }}/api/auth"
+    url: "{{ pihole_sync_primary_address.rstrip('/') }}/api/auth"
     method: POST
     body_format: json
     body:
@@ -16,13 +16,18 @@
   no_log: true
   failed_when: false
 
+- name: Normalize local Pi-hole API base URL for sync verification
+  ansible.builtin.set_fact:
+    pihole_sync_local_api_base: "{{ pihole_sync_local_api.rstrip('/') }}"
+
 - name: Authenticate to local Pi-hole API for sync verification
   ansible.builtin.uri:
-    url: "http://127.0.0.1/api/auth"
+    url: "{{ pihole_sync_local_api_base }}/auth"
     method: POST
     body_format: json
     body:
       password: "{{ pihole_sync_password }}"
+    validate_certs: false
     status_code:
       - 200
       - 401
@@ -160,7 +165,7 @@
 
 - name: Fetch primary DNS config for sync verification
   ansible.builtin.uri:
-    url: "{{ pihole_sync_primary_url.rstrip('/') }}/api/config/dns"
+    url: "{{ pihole_sync_primary_address.rstrip('/') }}/api/config/dns"
     method: GET
     headers:
       X-CSRF-Token: "{{ pihole_sync_primary_csrf }}"
@@ -172,11 +177,12 @@
 
 - name: Fetch local DNS config for sync verification
   ansible.builtin.uri:
-    url: "http://127.0.0.1/api/config/dns"
+    url: "{{ pihole_sync_local_api_base }}/config/dns"
     method: GET
     headers:
       X-CSRF-Token: "{{ pihole_sync_local_csrf }}"
       X-FTL-SID: "{{ pihole_sync_local_sid }}"
+    validate_certs: false
     return_content: true
   register: pihole_sync_local_dns
   when: pihole_sync_local_auth_ok

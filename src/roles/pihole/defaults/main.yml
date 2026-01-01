@@ -35,11 +35,15 @@ pihole_api_max_sessions:
 pihole_systemd_autostart: ""
 pihole_sync_enabled:
 pihole_sync_primary_url: ""
+pihole_sync_primary_ip: ""
+pihole_sync_primary_hostname: ""
 pihole_sync_interval:
 pihole_sync_backoff_seconds:
 pihole_sync_image: ""
 pihole_sync_password: ""
 pihole_sync_local_api: ""
+pihole_sync_local_api_hostname: ""
+pihole_sync_local_api_ip: ""
 pihole_sync_verify:
 pihole_sync_verify_delay:
 pihole_traefik_enabled: false
