@@ -110,6 +110,7 @@ and let replicas pull from it.
 2. On each replica, set:
    - `PIHOLE_SYNC_ENABLED=true`
    - `PIHOLE_SYNC_PRIMARY_URL=https://pihole-primary.local`
+   - `PIHOLE_SYNC_PRIMARY_IP=https://192.168.1.58`
    - `PIHOLE_SYNC_INTERVAL=300`
    - `PIHOLE_SYNC_BACKOFF_SECONDS=30`
    - `PIHOLE_SYNC_LOCAL_API=http://127.0.0.1/api`

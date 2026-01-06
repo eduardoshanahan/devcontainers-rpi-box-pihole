@@ -57,6 +57,22 @@
     pihole_sync_enabled: "{{ pihole_sync_enabled | bool }}"
   tags: [pihole]
 
+- name: Verify Docker Engine is available
+  block:
+    - name: Query Docker host info
+      community.docker.docker_host_info:
+      register: pihole_docker_info
+      changed_when: false
+      become: true
+  rescue:
+    - name: Fail when Docker is missing or unavailable
+      ansible.builtin.fail:
+        msg: >-
+          Docker Engine is required for the Pi-hole role. Install Docker,
+          ensure the daemon is running, and verify the Ansible user has access
+          to the Docker socket.
+  tags: [pihole]
+
 - name: Remove orphan Pi-hole sync container when sync is disabled
   community.docker.docker_container:
     name: pihole-sync
@@ -89,10 +105,10 @@
       - pihole_sync_verify_delay is defined
       - pihole_sync_verify_delay | int > 0
     fail_msg: >-
-      Define PIHOLE_SYNC_PRIMARY_URL, PIHOLE_SYNC_INTERVAL, and
-      PIHOLE_SYNC_IMAGE, PIHOLE_SYNC_BACKOFF_SECONDS,
-      PIHOLE_SYNC_PASSWORD, PIHOLE_SYNC_LOCAL_API, PIHOLE_SYNC_VERIFY, and
-      PIHOLE_SYNC_VERIFY_DELAY for replica nodes.
+      Define PIHOLE_SYNC_PRIMARY_URL, PIHOLE_SYNC_PRIMARY_IP, PIHOLE_SYNC_INTERVAL,
+      PIHOLE_SYNC_IMAGE, PIHOLE_SYNC_BACKOFF_SECONDS, PIHOLE_SYNC_PASSWORD,
+      PIHOLE_SYNC_LOCAL_API, PIHOLE_SYNC_VERIFY, and PIHOLE_SYNC_VERIFY_DELAY
+      for replica nodes.
   when: pihole_sync_enabled
   tags: [pihole]
 
@@ -428,6 +444,7 @@
   changed_when: false
   when:
     - pihole_dig_check.rc == 0
+    - item | length > 0
   loop:
     - "{{ pihole_traefik_host }}"
     - "google.com"

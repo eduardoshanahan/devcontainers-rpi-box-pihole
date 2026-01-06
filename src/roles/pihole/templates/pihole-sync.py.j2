@@ -70,10 +70,15 @@ def config_headers(session):
 
 
 def list_sync(opener, base_url, headers, key, desired, current):
-    desired_set = set(desired)
-    current_set = set(current)
-    adds = desired_set - current_set
-    removes = current_set - desired_set
+    def entry_key(value):
+        if isinstance(value, dict):
+            return json.dumps(value, sort_keys=True, separators=(",", ":"))
+        return str(value)
+
+    desired_map = {entry_key(value): value for value in desired}
+    current_map = {entry_key(value): value for value in current}
+    adds = [desired_map[key] for key in sorted(set(desired_map) - set(current_map))]
+    removes = [current_map[key] for key in sorted(set(current_map) - set(desired_map))]
 
     if key == "hosts":
         def host_paths(value):
