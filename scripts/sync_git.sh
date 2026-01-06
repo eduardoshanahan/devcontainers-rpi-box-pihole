@@ -1,7 +1,6 @@
-#!/bin/bash
+#!/bin/sh
 
-# Enable strict mode
-set -euo pipefail
+set -eu
 
 # Colors for output
 RED='\033[0;31m'
@@ -10,13 +9,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Print functions
-info() { echo -e "${YELLOW}  $1${NC}"; }
-success() { echo -e "${GREEN} $1${NC}"; }
-error() { echo -e "${RED} $1${NC}" >&2; }
+info() { printf '%b\n' "${YELLOW}  $1${NC}"; }
+success() { printf '%b\n' "${GREEN} $1${NC}"; }
+error() { printf '%b\n' "${RED} $1${NC}" >&2; }
 
 # Get the actual project directory (parent of scripts directory)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Load environment variables using the shared loader (project root .env is authoritative)
 ENV_LOADER="$PROJECT_DIR/.devcontainer/scripts/env-loader.sh"
@@ -25,11 +24,11 @@ if [ ! -f "$ENV_LOADER" ]; then
     exit 1
 fi
 # shellcheck disable=SC1090
-source "$ENV_LOADER"
+. "$ENV_LOADER"
 load_project_env "$PROJECT_DIR"
 
 require_env_set() {
-    local var_name="$1"
+    var_name="$1"
     if ! printenv "$var_name" >/dev/null 2>&1; then
         error "Missing required environment variable: $var_name"
         exit 1
@@ -37,8 +36,7 @@ require_env_set() {
 }
 
 require_env_nonempty() {
-    local var_name="$1"
-    local value
+    var_name="$1"
     value="$(printenv "$var_name" 2>/dev/null || true)"
     if [ -z "$value" ]; then
         error "Missing required environment variable: $var_name"
@@ -59,56 +57,38 @@ GIT_SYNC_REMOTES="$(printenv GIT_SYNC_REMOTES)"
 GIT_SYNC_PUSH_REMOTES="$(printenv GIT_SYNC_PUSH_REMOTES)"
 
 normalize_list() {
-    local raw="$1"
-    raw="${raw//,/ }"
-    local result=()
-    for item in $raw; do
-        [ -z "$item" ] && continue
-        local exists=false
-        for seen in "${result[@]}"; do
-            if [ "$seen" = "$item" ]; then
-                exists=true
-                break
-            fi
-        done
-        if [ "$exists" = false ]; then
-            result+=("$item")
-        fi
-    done
-    if [ "${#result[@]}" -gt 0 ]; then
-        printf '%s\n' "${result[@]}"
-    fi
+    raw="$1"
+    printf '%s\n' "$raw" | tr ',' ' ' | tr ' ' '\n' | awk 'NF{if(!seen[$0]++){print}}'
 }
 
-mapfile -t remote_list < <(normalize_list "$GIT_SYNC_REMOTES")
-if [ "${#remote_list[@]}" -eq 0 ]; then
+remote_list="$(normalize_list "$GIT_SYNC_REMOTES")"
+if [ -z "$remote_list" ]; then
     error "GIT_SYNC_REMOTES is empty after normalization"
     exit 1
 fi
-primary_remote="${remote_list[0]}"
+primary_remote="$(printf '%s\n' "$remote_list" | head -n 1)"
 
-mapfile -t push_targets < <(normalize_list "$GIT_SYNC_PUSH_REMOTES")
+push_targets="$(normalize_list "$GIT_SYNC_PUSH_REMOTES")"
 
 remote_env_key() {
-    echo "$1" | tr '[:lower:]' '[:upper:]' | sed 's/[^A-Z0-9]/_/g'
+    printf '%s\n' "$1" | tr '[:lower:]' '[:upper:]' | sed 's/[^A-Z0-9]/_/g'
 }
 
 remote_has_branch() {
-    local remote="$1"
-    local branch="$2"
+    remote="$1"
+    branch="$2"
     git ls-remote --heads "$remote" "$branch" | grep -q "$branch"
 }
 
 ensure_remote() {
-    local remote="$1"
+    remote="$1"
     if git remote get-url "$remote" >/dev/null 2>&1; then
         return
     fi
 
-    local env_suffix
     env_suffix="$(remote_env_key "$remote")"
-    local remote_url_var="GIT_REMOTE_URL_${env_suffix}"
-    local remote_url=""
+    remote_url_var="GIT_REMOTE_URL_${env_suffix}"
+    remote_url=""
     if printenv "$remote_url_var" >/dev/null 2>&1; then
         remote_url="$(printenv "$remote_url_var")"
     fi
@@ -127,7 +107,7 @@ ensure_remote() {
 }
 
 ensure_branch_checked_out() {
-    local branch="$1"
+    branch="$1"
     if git rev-parse --verify --quiet "refs/heads/$branch" >/dev/null; then
         git checkout "$branch" >/dev/null 2>&1 || git checkout "$branch"
     else
@@ -137,13 +117,14 @@ ensure_branch_checked_out() {
 }
 
 sync_remote() {
-    local remote="$1"
-    local branch="$2"
-    if [ $# -lt 3 ] || [ -z "$3" ]; then
+    remote="$1"
+    branch="$2"
+    mode="$3"
+
+    if [ -z "$mode" ]; then
         error "sync_remote requires a mode (normal or force)"
         exit 1
     fi
-    local mode="$3"
 
     if [ "$mode" = "force" ]; then
         info "Force syncing from $remote/$branch"
@@ -167,8 +148,8 @@ sync_remote() {
 }
 
 ensure_upstream_tracking() {
-    local remote="$1"
-    local branch="$2"
+    remote="$1"
+    branch="$2"
     if git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
         return
     fi
@@ -188,11 +169,16 @@ main() {
         exit 1
     fi
 
-    for remote in "${remote_list[@]}"; do
+    old_ifs="$IFS"
+    IFS='
+'
+    set -- $remote_list
+    IFS="$old_ifs"
+    for remote in "$@"; do
         ensure_remote "$remote"
     done
 
-    current_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+    current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")"
     if [ "$current_branch" = "HEAD" ] || [ -z "$current_branch" ]; then
         current_branch="main"
     fi
@@ -206,7 +192,12 @@ main() {
     ensure_branch_checked_out "$target_branch"
     info "Syncing branch $target_branch"
 
-    for remote in "${remote_list[@]}"; do
+    old_ifs="$IFS"
+    IFS='
+'
+    set -- $remote_list
+    IFS="$old_ifs"
+    for remote in "$@"; do
         if [ "$remote" = "$primary_remote" ] && [ "$FORCE_PULL" = "true" ]; then
             sync_remote "$remote" "$target_branch" "force"
         else
@@ -216,8 +207,13 @@ main() {
 
     ensure_upstream_tracking "$primary_remote" "$target_branch"
 
-    if [ "${#push_targets[@]}" -gt 0 ]; then
-        for remote in "${push_targets[@]}"; do
+    if [ -n "$push_targets" ]; then
+        old_ifs="$IFS"
+        IFS='
+'
+        set -- $push_targets
+        IFS="$old_ifs"
+        for remote in "$@"; do
             ensure_remote "$remote"
             info "Pushing $target_branch to $remote"
             if remote_has_branch "$remote" "$target_branch"; then

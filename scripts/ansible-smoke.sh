@@ -1,8 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-set -euo pipefail
+set -eu
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ANSIBLE_ROOT="${REPO_ROOT}/src"
 ANSIBLE_CFG="${ANSIBLE_ROOT}/ansible.cfg"
 INVENTORY_DIR="${ANSIBLE_ROOT}/inventory"
@@ -46,8 +47,7 @@ else
 fi
 
 run_playbook() {
-    local label="$1"
-    local output_file
+    label="$1"
     output_file="$(mktemp)"
 
     echo ">>> Executing ansible-playbook ${PLAYBOOK} (${label}, inventory: ${INVENTORY})"
