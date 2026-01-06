@@ -1,15 +1,14 @@
-#!/bin/bash
+#!/bin/sh
 # --- SSH Agent Setup ---
 
 # Exit on error, undefined vars, and pipe failures
-set -euo pipefail
-IFS=$'\n\t'
+set -eu
 
 # Function to check file permissions
 check_file_permissions() {
-  local file="$1"
-  local expected_perms="$2"
-  local actual_perms
+  file="$1"
+  expected_perms="$2"
+  actual_perms=""
 
   actual_perms=$(stat -c %a "$file")
   if [ "$actual_perms" != "$expected_perms" ]; then
@@ -20,7 +19,11 @@ check_file_permissions() {
 }
 
 # Check for an interactive shell.
-if [[ $- == *i* ]]; then
+case $- in
+  *i*) ;;
+  *) return 0 ;;
+esac
+
   # Create .ssh directory with proper permissions if it doesn't exist
   if [ ! -d "$HOME/.ssh" ]; then
     mkdir -p "$HOME/.ssh"
@@ -64,17 +67,18 @@ if [[ $- == *i* ]]; then
     echo "Looking for SSH keys in $HOME/.ssh/"
     for key in "$HOME/.ssh/"*; do
       if [ -f "$key" ]; then
-        if [[ "$key" != *.pub ]] && [[ "$key" != *known_hosts* ]] && [[ "$key" != *agent_env ]]; then
-          echo "Attempting to add private key: $key"
-          if check_file_permissions "$key" "600"; then
-            if ssh-add "$key" 2>/dev/null; then
-              echo "Successfully added key: $key"
-            else
-              echo "Failed to add key: $key"
-            fi
+        case "$key" in
+          *.pub|*known_hosts*|*agent_env) continue ;;
+        esac
+        echo "Attempting to add private key: $key"
+        if check_file_permissions "$key" "600"; then
+          if ssh-add "$key" 2>/dev/null; then
+            echo "Successfully added key: $key"
           else
-            echo "Warning: $key has incorrect permissions. Skipping."
+            echo "Failed to add key: $key"
           fi
+        else
+          echo "Warning: $key has incorrect permissions. Skipping."
         fi
       fi
     done
@@ -85,7 +89,6 @@ if [[ $- == *i* ]]; then
   # Show all loaded keys
   echo "Currently loaded keys:"
   ssh-add -l || echo "ssh-add failed (no identities or agent not available)."
-fi
 
 set +e
 # --- End SSH Agent Setup ---

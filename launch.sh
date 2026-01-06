@@ -1,7 +1,6 @@
-#!/bin/bash
+#!/bin/sh
 
-# Set strict bash options
-set -euo pipefail
+set -eu
 
 # Colors for output
 RED='\033[0;31m'
@@ -11,21 +10,21 @@ NC='\033[0m' # No Color
 
 # Function to print error messages
 error() {
-  echo -e "${RED}ERROR: $1${NC}" >&2
+  printf '%b\n' "${RED}ERROR: $1${NC}" >&2
 }
 
 # Function to print success messages
 success() {
-  echo -e "${GREEN}$1${NC}"
+  printf '%b\n' "${GREEN}$1${NC}"
 }
 
 # Function to print info messages
 info() {
-  echo -e "${YELLOW}$1${NC}"
+  printf '%b\n' "${YELLOW}$1${NC}"
 }
 
 # Load project environment via shared loader (root .env is authoritative)
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENV_LOADER="$PROJECT_DIR/.devcontainer/scripts/env-loader.sh"
 
 if [ ! -f "$ENV_LOADER" ]; then
@@ -34,14 +33,14 @@ if [ ! -f "$ENV_LOADER" ]; then
 fi
 
 # shellcheck disable=SC1090
-source "$ENV_LOADER"
+. "$ENV_LOADER"
 load_project_env "$PROJECT_DIR"
 
 # Validate environment variables before launching anything
 VALIDATOR="$PROJECT_DIR/.devcontainer/scripts/validate-env.sh"
 if [ -f "$VALIDATOR" ]; then
   info "Validating environment variables..."
-  if ! bash "$VALIDATOR"; then
+  if ! sh "$VALIDATOR"; then
     error "Environment validation failed. Please fix your .env values."
     exit 1
   fi
@@ -67,7 +66,7 @@ if [ "${EDITOR_CHOICE}" != "code" ] && [ "${EDITOR_CHOICE}" != "cursor" ] && [ "
 fi
 
 # Check if the chosen editor is installed
-if ! command -v "${EDITOR_CHOICE}" &>/dev/null; then
+if ! command -v "${EDITOR_CHOICE}" >/dev/null 2>&1; then
   error "${EDITOR_CHOICE} is not installed!"
   if [ "${EDITOR_CHOICE}" = "code" ]; then
     error "Please install VS Code from https://code.visualstudio.com/"
@@ -94,4 +93,3 @@ case "${EDITOR_CHOICE}" in
 esac
 
 success "Editor launched. Use the Dev Containers extension's \"Reopen in Container\" to start the environment."
-disown || true

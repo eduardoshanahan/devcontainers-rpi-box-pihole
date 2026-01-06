@@ -1,11 +1,11 @@
-#!/bin/bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # Prefer workspace colors, then HOME; fallback to minimal colors
 if [ -f "/workspace/.devcontainer/scripts/colors.sh" ]; then
-    source "/workspace/.devcontainer/scripts/colors.sh"
+    . "/workspace/.devcontainer/scripts/colors.sh"
 elif [ -f "$HOME/.devcontainer/scripts/colors.sh" ]; then
-    source "$HOME/.devcontainer/scripts/colors.sh"
+    . "$HOME/.devcontainer/scripts/colors.sh"
 else
     COLOR_RESET='\033[0m'
     COLOR_BOLD='\033[1m'
@@ -19,7 +19,7 @@ loader_found=false
 for loader in "/workspace/.devcontainer/scripts/env-loader.sh" "$HOME/.devcontainer/scripts/env-loader.sh"; do
     if [ -f "$loader" ]; then
         # shellcheck disable=SC1090
-        source "$loader"
+        . "$loader"
         load_project_env "/workspace"
         loader_found=true
         break
@@ -27,7 +27,7 @@ for loader in "/workspace/.devcontainer/scripts/env-loader.sh" "$HOME/.devcontai
 done
 
 if [ "$loader_found" = false ]; then
-    echo -e "${YELLOW}Warning: env-loader.sh not found; environment variables may be missing${COLOR_RESET}"
+    printf '%b\n' "${YELLOW}Warning: env-loader.sh not found; environment variables may be missing${COLOR_RESET}"
 fi
 
 # Configure Git if variables are set
@@ -37,13 +37,13 @@ if printenv GIT_USER_NAME >/dev/null 2>&1 && printenv GIT_USER_EMAIL >/dev/null 
     if [ -n "$git_user_name" ] && [ -n "$git_user_email" ]; then
         REPO_DIR="/workspace"
         if [ -d "$REPO_DIR/.git" ]; then
-            echo -e "${GREEN}Configuring Git (repo-local) with:${COLOR_RESET}"
-            echo -e "  ${COLOR_BOLD}Name:${COLOR_RESET}  $git_user_name"
-            echo -e "  ${COLOR_BOLD}Email:${COLOR_RESET} $git_user_email"
+            printf '%b\n' "${GREEN}Configuring Git (repo-local) with:${COLOR_RESET}"
+            printf '%b\n' "  ${COLOR_BOLD}Name:${COLOR_RESET}  $git_user_name"
+            printf '%b\n' "  ${COLOR_BOLD}Email:${COLOR_RESET} $git_user_email"
             git -C "$REPO_DIR" config user.name "$git_user_name"
             git -C "$REPO_DIR" config user.email "$git_user_email"
         else
-            echo -e "${YELLOW}Warning:${COLOR_RESET} No git repository found in $REPO_DIR. Skipping git identity setup."
+            printf '%b\n' "${YELLOW}Warning:${COLOR_RESET} No git repository found in $REPO_DIR. Skipping git identity setup."
         fi
     fi
 fi
@@ -66,4 +66,4 @@ if ! grep -qF "source /workspace/.devcontainer/scripts/ssh-agent-setup.sh" ~/.ba
     echo 'source /workspace/.devcontainer/scripts/ssh-agent-setup.sh' >> ~/.bashrc
 fi
 
-echo -e "${GREEN}Initialization complete.${COLOR_RESET}"
+printf '%b\n' "${GREEN}Initialization complete.${COLOR_RESET}"

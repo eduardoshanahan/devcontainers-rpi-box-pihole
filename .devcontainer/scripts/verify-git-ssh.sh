@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # Simple verify script for SSH agent forwarding and git config
 # Usage: ./verify-git-ssh.sh git-host

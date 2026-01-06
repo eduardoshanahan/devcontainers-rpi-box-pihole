@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # Shared env loader: load project-root .env (authoritative) then fill missing from .devcontainer/config/.env
 # Usage:
 #   # from inside container: source /workspace/.devcontainer/scripts/env-loader.sh && load_project_env /workspace [debug]
@@ -8,8 +8,8 @@
 #   - Set ENV_LOADER_DEBUG=1 (exported) or pass second param as 1 to load_project_env to print newly loaded vars.
 
 load_project_env() {
-    local workspace_dir="$1"
-    local debug=""
+    workspace_dir="$1"
+    debug=""
 
     if [ -z "$workspace_dir" ]; then
         echo "Error: load_project_env requires a workspace directory"
@@ -21,19 +21,18 @@ load_project_env() {
     elif [ -n "${ENV_LOADER_DEBUG+x}" ]; then
         debug="$ENV_LOADER_DEBUG"
     fi
-    local project_env="$workspace_dir/.env"
-    local dev_env="$workspace_dir/.devcontainer/config/.env"
+    project_env="$workspace_dir/.env"
+    dev_env="$workspace_dir/.devcontainer/config/.env"
 
-    # Capture current variables
-    local before_file
+    # Capture current exported variables
     before_file="$(mktemp)"
-    compgen -v | sort > "$before_file"
+    printenv | cut -d= -f1 | sort > "$before_file"
 
     # Load project root .env first (authoritative); preserve quoting
     if [ -f "$project_env" ]; then
         set -a
         # shellcheck disable=SC1090
-        source "$project_env"
+        . "$project_env"
         set +a
     fi
 
@@ -56,30 +55,30 @@ load_project_env() {
     fi
 
     # Capture after state and compute newly added variables
-    local after_file
     after_file="$(mktemp)"
-    compgen -v | sort > "$after_file"
+    printenv | cut -d= -f1 | sort > "$after_file"
 
     if [ "$debug" = "1" ] || [ "$debug" = "true" ]; then
         echo "env-loader: debug enabled — listing variables added by load_project_env (workspace: $workspace_dir)"
         # comm -13 shows lines present in after_file but not before_file
         if command -v comm >/dev/null 2>&1; then
+            comm -13 "$before_file" "$after_file" > "${after_file}.new"
             while IFS= read -r var; do
-                # Skip empty var names (defensive)
                 [ -z "$var" ] && continue
-                # Print name and value
-                printf '%s=%s\n' "$var" "${!var}"
-            done < <(comm -13 "$before_file" "$after_file")
+                value="$(printenv "$var" 2>/dev/null || true)"
+                printf '%s=%s\n' "$var" "$value"
+            done < "${after_file}.new"
         else
             # Fallback: simple grep/diff approach
             echo "env-loader: comm not available; showing all variables (best-effort)"
             while IFS= read -r var; do
                 [ -z "$var" ] && continue
-                printf '%s=%s\n' "$var" "${!var}"
+                value="$(printenv "$var" 2>/dev/null || true)"
+                printf '%s=%s\n' "$var" "$value"
             done < "$after_file"
         fi
     fi
 
     # Clean up
-    rm -f "$before_file" "$after_file" 2>/dev/null || true
+    rm -f "$before_file" "$after_file" "${after_file}.new" 2>/dev/null || true
 }

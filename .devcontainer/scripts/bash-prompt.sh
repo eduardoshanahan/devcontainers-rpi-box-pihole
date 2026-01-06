@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Enable Starship prompt first
 if command -v starship >/dev/null 2>&1; then
@@ -8,28 +8,28 @@ fi
 # Load environment variables using shared loader (try workspace first)
 if [ -f "/workspace/.devcontainer/scripts/env-loader.sh" ]; then
     # shellcheck disable=SC1090
-    source "/workspace/.devcontainer/scripts/env-loader.sh"
+    . "/workspace/.devcontainer/scripts/env-loader.sh"
     load_project_env "/workspace"
 elif [ -f "/workspace/.env" ]; then
     # simple fallback
     # shellcheck disable=SC1090
-    source "/workspace/.env"
+    . "/workspace/.env"
 else
     echo "Warning: .env not found in workspace; continuing without it"
 fi
 
 if [ -f /etc/container.env ]; then
-    source /etc/container.env
+    . /etc/container.env
 fi
 
 # Source SSH agent setup
 if [ -f "$HOME/.devcontainer/scripts/ssh-agent-setup.sh" ]; then
-    source "$HOME/.devcontainer/scripts/ssh-agent-setup.sh"
+    . "$HOME/.devcontainer/scripts/ssh-agent-setup.sh"
 fi
 
 # Source color definitions
 if [ -f "$HOME/.devcontainer/scripts/colors.sh" ]; then
-    source "$HOME/.devcontainer/scripts/colors.sh"
+    . "$HOME/.devcontainer/scripts/colors.sh"
 else
     echo "Warning: colors.sh not found, using default colors"
 fi

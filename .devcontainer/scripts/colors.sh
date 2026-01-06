@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 # Color definitions
 COLOR_RESET='\[\033[0m\]'

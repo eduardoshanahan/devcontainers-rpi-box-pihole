@@ -60,10 +60,12 @@
     "postCreateCommand": "chmod +x ~/.devcontainer/scripts/post-create.sh && ~/.devcontainer/scripts/post-create.sh",
     "initializeCommand": "export CONTAINER_MEMORY=${localEnv:CONTAINER_MEMORY} && export CONTAINER_CPUS=${localEnv:CONTAINER_CPUS} && export CONTAINER_SHM_SIZE=${localEnv:CONTAINER_SHM_SIZE} && export CONTAINER_HOSTNAME=${localEnv:CONTAINER_HOSTNAME}",
     "containerEnv": {
+        "PROJECT_NAME": "${localEnv:PROJECT_NAME}",
         "USERNAME": "${localEnv:HOST_USERNAME}",
         "USER_UID": "${localEnv:HOST_UID}",
         "USER_GID": "${localEnv:HOST_GID}",
         "CONTAINER_HOSTNAME": "${localEnv:CONTAINER_HOSTNAME}",
+        "EDITOR_CHOICE": "${localEnv:EDITOR_CHOICE}",
         "GIT_USER_NAME": "${localEnv:GIT_USER_NAME}",
         "GIT_USER_EMAIL": "${localEnv:GIT_USER_EMAIL}",
         "GIT_REMOTE_URL": "${localEnv:GIT_REMOTE_URL}",

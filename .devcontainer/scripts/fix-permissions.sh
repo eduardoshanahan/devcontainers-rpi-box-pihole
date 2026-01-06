@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 if [ $# -lt 1 ]; then
     printf 'Usage: %s /path/to/.devcontainer/scripts\n' "$0"

@@ -1,27 +1,30 @@
-#!/bin/bash
+#!/bin/sh
+set -eu
 
 # Load environment variables via shared loader (project root .env is authoritative)
 if [ -f "/workspace/.devcontainer/scripts/env-loader.sh" ]; then
     # shellcheck disable=SC1090
-    source "/workspace/.devcontainer/scripts/env-loader.sh"
+    . "/workspace/.devcontainer/scripts/env-loader.sh"
     load_project_env "/workspace"
 elif [ -f "$HOME/.devcontainer/scripts/env-loader.sh" ]; then
     # shellcheck disable=SC1090
-    source "$HOME/.devcontainer/scripts/env-loader.sh"
+    . "$HOME/.devcontainer/scripts/env-loader.sh"
     load_project_env "/workspace"
 else
     echo "Warning: env-loader.sh not found; skipping environment load"
 fi
 
 # Configure Git if variables are set
-if [ -n "$GIT_USER_NAME" ] && [ -n "$GIT_USER_EMAIL" ]; then
+git_user_name="${GIT_USER_NAME-}"
+git_user_email="${GIT_USER_EMAIL-}"
+if [ -n "$git_user_name" ] && [ -n "$git_user_email" ]; then
     REPO_DIR="/workspace"
     if [ -d "$REPO_DIR/.git" ]; then
         echo "Configuring repo-local Git identity:"
-        echo "  Name:  $GIT_USER_NAME"
-        echo "  Email: $GIT_USER_EMAIL"
-        git -C "$REPO_DIR" config user.name "$GIT_USER_NAME"
-        git -C "$REPO_DIR" config user.email "$GIT_USER_EMAIL"
+        echo "  Name:  $git_user_name"
+        echo "  Email: $git_user_email"
+        git -C "$REPO_DIR" config user.name "$git_user_name"
+        git -C "$REPO_DIR" config user.email "$git_user_email"
     else
         echo "Warning: No git repository found in $REPO_DIR. Skipping git identity setup."
     fi
@@ -43,10 +46,10 @@ ANSIBLE_ROOT="/workspace/src"
 ANSIBLE_REQUIREMENTS_FILE="${ANSIBLE_ROOT}/requirements.yml"
 
 retry_galaxy_install() {
-    local description="$1"
+    description="$1"
     shift
-    local max_attempts=3
-    local attempt=1
+    max_attempts=3
+    attempt=1
     until "$@"; do
         if [ "$attempt" -ge "$max_attempts" ]; then
             echo "Warning: ${description} failed after ${max_attempts} attempts." >&2
@@ -89,7 +92,7 @@ fi
 
 # Ensure login shells also inherit the alias setup by sourcing .bashrc
 ensure_profile_sources_bashrc() {
-    local profile_file="$1"
+    profile_file="$1"
     [ -f "$profile_file" ] || touch "$profile_file"
     if ! grep -q "source ~/.bashrc" "$profile_file"; then
         cat <<'EOF' >> "$profile_file"

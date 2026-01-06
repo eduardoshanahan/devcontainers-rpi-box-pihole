@@ -1,5 +1,5 @@
-#!/bin/bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 # Determine project directory
 if [ -z "${PROJECT_DIR+x}" ] || [ -z "$PROJECT_DIR" ]; then
@@ -15,12 +15,11 @@ fi
 
 # Load variables: project root .env is authoritative, .devcontainer/config/.env supplies defaults
 # shellcheck disable=SC1090
-source "$ENV_LOADER"
+. "$ENV_LOADER"
 load_project_env "$PROJECT_DIR"
 
 require_var() {
-    local var_name="$1"
-    local value
+    var_name="$1"
     value="$(printenv "$var_name" 2>/dev/null || true)"
     if [ -z "$value" ]; then
         echo "Error: $var_name is required"
